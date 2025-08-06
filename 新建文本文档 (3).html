@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (終極版)</title>
+    <title>JSON 標註互動式編輯工具 (所見即所得版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體';
+            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體', 'Noto Sans JP', sans-serif;
             background-color: #111827;
             color: #e5e7eb;
         }
@@ -64,8 +64,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (終極版)</h1>
-            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (所見即所得版)</h1>
+            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。文字即時渲染，操作更直觀。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -111,7 +111,7 @@
                         <div class="space-y-3">
                             <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
                             <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃/紅)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字與屬性 (白色)</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容</label>
                         </div>
                     </div>
 
@@ -241,7 +241,6 @@
             drawModeBtn.classList.toggle('btn-warning', isDrawingMode);
             drawModeBtn.classList.toggle('btn-secondary', !isDrawingMode);
             mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
-            // 進入繪製模式時，取消所有選取
             if (isDrawingMode) {
                 selectedLines = [];
                 activeTarget = null;
@@ -294,6 +293,7 @@
             if (e.shiftKey) { // 多選
                 if (clickedLine) {
                     toggleLineSelection(clickedLine.blockIndex, clickedLine.lineIndex);
+                    activeTarget = null; // 多選時取消單一啟動目標
                 }
             } else { // 單選
                 activeTarget = clickedLine;
@@ -413,11 +413,13 @@
 
         function updateActionButtons() {
             const count = selectedLines.length;
+            const singleSelected = count === 1;
+            
             mergeBtn.disabled = count < 2;
             deleteBtn.disabled = count < 1;
-            splitBtn.disabled = count !== 1 || (count === 1 && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
-            editTextBtn.disabled = count !== 1;
-            editPropBtn.disabled = count !== 1;
+            splitBtn.disabled = !singleSelected || (singleSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
+            editTextBtn.disabled = !singleSelected;
+            editPropBtn.disabled = !singleSelected;
         }
         
         function editSelectedLineText() {
@@ -505,7 +507,7 @@
             a.href = url;
             a.download = 'modified_annotations.json';
             document.body.appendChild(a);
-a.click();
+            a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
@@ -527,6 +529,12 @@ a.click();
                     ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                    // 繪製索引
+                    const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
+                    ctx.strokeText(`[${blockIndex}]`, x1, y1 - 5);
+                    ctx.fillText(`[${blockIndex}]`, x1, y1 - 5);
                 }
 
                 if (block.lines_coords) {
@@ -544,6 +552,10 @@ a.click();
                             ctx.stroke();
                         }
                         
+                        if (showText) {
+                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical);
+                        }
+
                         if (isActiveTarget) {
                             const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
@@ -563,17 +575,6 @@ a.click();
                         }
                     });
                 }
-                
-                if (showText && block.box && block.box.length === 4 && block.lines.length > 0) {
-                    const [x1, y1] = block.box;
-                    const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
-                    ctx.font = `bold ${fontSize}px sans-serif`;
-                    ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-                    const orientation = block.vertical ? '[豎]' : '[橫]';
-                    const textContent = `${orientation}[${blockIndex}] ${block.lines.join(' ')}`;
-                    ctx.strokeText(textContent, x1, y1 - 5);
-                    ctx.fillText(textContent, x1, y1 - 5);
-                }
             });
             
             if (isDrawingMode && isDraggingRect) {
@@ -583,6 +584,40 @@ a.click();
                 ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
                 ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
             }
+        }
+        
+        function drawTextInPolygon(text, polygon, isVertical) {
+            const p0 = polygon[0], p1 = polygon[1], p3 = polygon[3];
+            const width = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+            const height = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+            const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+            const center = getPolygonCenter(polygon);
+
+            ctx.save();
+            ctx.translate(center.x, center.y);
+            ctx.rotate(angle);
+
+            let fontSize;
+            if (isVertical) {
+                fontSize = Math.min(height / text.length, width) * 0.8;
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const totalTextHeight = text.length * fontSize;
+                let startY = -totalTextHeight / 2 + fontSize / 2;
+                for (let i = 0; i < text.length; i++) {
+                    ctx.strokeText(text[i], 0, startY + i * fontSize);
+                    ctx.fillText(text[i], 0, startY + i * fontSize);
+                }
+            } else {
+                fontSize = height * 0.8;
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.strokeText(text, 0, 0);
+                ctx.fillText(text, 0, 0);
+            }
+            ctx.restore();
         }
 
         // --- 幾何計算輔助函式 ---
