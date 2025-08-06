@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註結果視覺化工具</title>
+    <title>JSON 標註互動式編輯工具</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -24,17 +24,21 @@
             padding: 0.75rem 1.5rem;
             border-radius: 0.5rem;
             font-weight: 600;
-            transition: background-color 0.3s, transform 0.2s;
+            transition: all 0.3s;
             cursor: pointer;
             text-align: center;
+            border: 1px solid transparent;
         }
-        .btn-primary {
-            background-color: #3b82f6;
-            color: white;
-        }
-        .btn-primary:hover {
-            background-color: #2563eb;
-        }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #4b5563; color: white; }
+        .btn-secondary:hover { background-color: #374151; }
+        .btn-success { background-color: #22c55e; color: white; }
+        .btn-success:hover { background-color: #16a34a; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
+        
         canvas {
             border-radius: 0.5rem;
             border: 2px dashed #4b5563;
@@ -42,58 +46,62 @@
             height: auto;
             background-color: #374151;
         }
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-        }
-        .checkbox {
-            width: 1.25rem;
-            height: 1.25rem;
-            margin-right: 0.5rem;
-            border-radius: 0.25rem;
-            accent-color: #3b82f6;
-        }
+        .edit-mode canvas { cursor: pointer; }
+        .checkbox-label { display: flex; align-items: center; cursor: pointer; }
+        .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
 </head>
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註結果視覺化工具</h1>
-            <p class="mt-2 text-lg text-gray-400">上傳圖片和對應的 JSON 檔案，即可看到視覺化的標註結果。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、匯出，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             <!-- 控制面板 -->
             <div class="md:col-span-1">
                 <div class="card space-y-6">
+                    <!-- 檔案選擇 -->
                     <div>
-                        <label for="imageInput" class="btn btn-primary w-full">1. 選擇圖片檔案</label>
-                        <input type="file" id="imageInput" class="hidden" accept="image/*">
-                        <p id="imageStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇圖片</p>
-                    </div>
-                    <div>
-                        <label for="jsonInput" class="btn btn-primary w-full">2. 選擇 JSON 檔案</label>
-                        <input type="file" id="jsonInput" class="hidden" accept=".json,application/json">
-                        <p id="jsonStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇 JSON</p>
+                        <h3 class="text-lg font-semibold mb-4">1. 載入檔案</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="imageInput" class="btn btn-primary w-full">選擇圖片檔案</label>
+                                <input type="file" id="imageInput" class="hidden" accept="image/*">
+                                <p id="imageStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇圖片</p>
+                            </div>
+                            <div>
+                                <label for="jsonInput" class="btn btn-primary w-full">選擇 JSON 檔案</label>
+                                <input type="file" id="jsonInput" class="hidden" accept=".json,application/json">
+                                <p id="jsonStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇 JSON</p>
+                            </div>
+                        </div>
                     </div>
                     
+                    <!-- 編輯控制 -->
+                    <div class="border-t border-gray-600 pt-6">
+                        <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
+                        <div class="space-y-4">
+                            <button id="editModeBtn" class="btn btn-secondary w-full">進入編輯模式</button>
+                            <button id="mergeBtn" class="btn btn-success w-full" disabled>合併選取 (0)</button>
+                        </div>
+                    </div>
+
+                    <!-- 顯示選項 -->
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">顯示選項</h3>
                         <div class="space-y-3">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="showBlocks" class="checkbox" checked>
-                                顯示總體邊界框 (綠色)
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="showLines" class="checkbox" checked>
-                                顯示精確文字行 (藍色)
-                            </label>
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="showText" class="checkbox" checked>
-                                顯示文字內容 (白色)
-                            </label>
+                            <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃)</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容 (白色)</label>
                         </div>
+                    </div>
+
+                    <!-- 匯出 -->
+                    <div class="border-t border-gray-600 pt-6">
+                         <h3 class="text-lg font-semibold mb-4">3. 儲存結果</h3>
+                        <button id="exportBtn" class="btn btn-danger w-full">匯出修改後的 JSON</button>
                     </div>
                 </div>
             </div>
@@ -108,26 +116,27 @@
     </div>
 
     <script>
+        // DOM 元素獲取
         const imageInput = document.getElementById('imageInput');
         const jsonInput = document.getElementById('jsonInput');
         const mainCanvas = document.getElementById('mainCanvas');
         const ctx = mainCanvas.getContext('2d');
-
         const imageStatus = document.getElementById('imageStatus');
         const jsonStatus = document.getElementById('jsonStatus');
-        
         const showBlocksCheckbox = document.getElementById('showBlocks');
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
+        const editModeBtn = document.getElementById('editModeBtn');
+        const mergeBtn = document.getElementById('mergeBtn');
+        const exportBtn = document.getElementById('exportBtn');
 
+        // 應用程式狀態變數
         let originalImage = null;
         let jsonData = null;
+        let isEditMode = false;
+        let selectedLines = []; // 儲存格式: { blockIndex, lineIndex, originalBlockIndex, originalLineIndex }
 
-        function handleFiles() {
-            if (originalImage && jsonData) {
-                drawVisualizations();
-            }
-        }
+        // --- 事件監聽 ---
 
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -169,14 +178,172 @@
             checkbox.addEventListener('change', handleFiles);
         });
 
+        editModeBtn.addEventListener('click', toggleEditMode);
+        mergeBtn.addEventListener('click', mergeSelectedLines);
+        exportBtn.addEventListener('click', exportJson);
+        mainCanvas.addEventListener('click', handleCanvasClick);
+
+        // --- 核心功能函式 ---
+
+        function handleFiles() {
+            if (originalImage && jsonData) {
+                drawVisualizations();
+            }
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            if (isEditMode) {
+                editModeBtn.textContent = '退出編輯模式';
+                editModeBtn.classList.replace('btn-secondary', 'btn-danger');
+                mainCanvas.parentElement.parentElement.classList.add('edit-mode');
+            } else {
+                editModeBtn.textContent = '進入編輯模式';
+                editModeBtn.classList.replace('btn-danger', 'btn-secondary');
+                mainCanvas.parentElement.parentElement.classList.remove('edit-mode');
+                selectedLines = [];
+                updateMergeButton();
+                drawVisualizations();
+            }
+        }
+
+        function handleCanvasClick(e) {
+            if (!isEditMode || !jsonData) return;
+
+            const rect = mainCanvas.getBoundingClientRect();
+            const scaleX = mainCanvas.width / rect.width;
+            const scaleY = mainCanvas.height / rect.height;
+            const clickPoint = {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+
+            let lineClicked = false;
+            for (let i = 0; i < jsonData.blocks.length; i++) {
+                const block = jsonData.blocks[i];
+                if (!block.lines_coords) continue;
+
+                for (let j = 0; j < block.lines_coords.length; j++) {
+                    const polygon = block.lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
+                    if (isPointInPolygon(clickPoint, polygon)) {
+                        toggleLineSelection(i, j);
+                        lineClicked = true;
+                        break;
+                    }
+                }
+                if (lineClicked) break;
+            }
+            drawVisualizations();
+        }
+
+        function toggleLineSelection(blockIndex, lineIndex) {
+            const findIndex = selectedLines.findIndex(
+                sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex
+            );
+
+            if (findIndex > -1) {
+                // 如果已選中，則取消選擇
+                selectedLines.splice(findIndex, 1);
+            } else {
+                // 如果未選中，則加入選擇
+                selectedLines.push({ blockIndex, lineIndex });
+            }
+            updateMergeButton();
+        }
+        
+        function updateMergeButton() {
+            const count = selectedLines.length;
+            mergeBtn.textContent = `合併選取 (${count})`;
+            mergeBtn.disabled = count < 2;
+        }
+
+        function mergeSelectedLines() {
+            if (selectedLines.length < 2) return;
+
+            const newBlock = {
+                box: [],
+                vertical: false, // 可根據多數決或第一個元素決定
+                font_size: 0,
+                lines_coords: [],
+                lines: []
+            };
+
+            let totalFontSize = 0;
+            const linesToRemove = [];
+
+            // 收集所有選中的 line
+            selectedLines.forEach(sel => {
+                const block = jsonData.blocks[sel.blockIndex];
+                const lineCoord = block.lines_coords[sel.lineIndex];
+                const lineText = block.lines[sel.lineIndex];
+                
+                newBlock.lines_coords.push(lineCoord);
+                newBlock.lines.push(lineText);
+                totalFontSize += block.font_size || 0;
+                
+                linesToRemove.push({ bIndex: sel.blockIndex, lIndex: sel.lineIndex });
+            });
+            
+            newBlock.font_size = totalFontSize / selectedLines.length;
+            if (jsonData.blocks[selectedLines[0].blockIndex]) {
+                 newBlock.vertical = jsonData.blocks[selectedLines[0].blockIndex].vertical;
+            }
+
+            // 從後往前刪除，避免索引錯亂
+            linesToRemove.sort((a, b) => b.bIndex - a.bIndex || b.lIndex - a.lIndex);
+            linesToRemove.forEach(item => {
+                jsonData.blocks[item.bIndex].lines_coords.splice(item.lIndex, 1);
+                jsonData.blocks[item.bIndex].lines.splice(item.lIndex, 1);
+            });
+
+            // 移除空的 block
+            jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords.length > 0);
+            
+            // 重新計算新 block 的 box
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            newBlock.lines_coords.forEach(polygon => {
+                polygon.forEach(point => {
+                    minX = Math.min(minX, point[0]);
+                    minY = Math.min(minY, point[1]);
+                    maxX = Math.max(maxX, point[0]);
+                    maxY = Math.max(maxY, point[1]);
+                });
+            });
+            newBlock.box = [minX, minY, maxX, maxY];
+
+            // 將新 block 加入到資料中
+            jsonData.blocks.push(newBlock);
+
+            // 清空選取並重繪
+            selectedLines = [];
+            updateMergeButton();
+            drawVisualizations();
+        }
+
+        function exportJson() {
+            if (!jsonData) {
+                alert("沒有可匯出的資料！");
+                return;
+            }
+            const jsonString = JSON.stringify(jsonData, null, 2);
+            const blob = new Blob([jsonString], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'modified_annotations.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- 繪圖與輔助函式 ---
+
         function drawVisualizations() {
             if (!originalImage || !jsonData) return;
 
-            // 設定畫布尺寸與圖片一致
             mainCanvas.width = jsonData.img_width || originalImage.width;
             mainCanvas.height = jsonData.img_height || originalImage.height;
-
-            // 繪製底圖
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             ctx.drawImage(originalImage, 0, 0, mainCanvas.width, mainCanvas.height);
 
@@ -184,47 +351,58 @@
             const showLines = showLinesCheckbox.checked;
             const showText = showTextCheckbox.checked;
 
-            // 遍歷所有文字區塊
-            jsonData.blocks.forEach((block, index) => {
-                // 1. 繪製總體邊界框 (綠色)
-                if (showBlocks && block.box) {
+            jsonData.blocks.forEach((block, blockIndex) => {
+                if (showBlocks && block.box && block.box.length === 4) {
                     ctx.strokeStyle = '#22c55e'; // 綠色
                     ctx.lineWidth = 4;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                 }
 
-                // 2. 繪製精確文字行 (藍色)
-                if (showLines && block.lines_coords) {
-                    ctx.strokeStyle = '#3b82f6'; // 藍色
-                    ctx.lineWidth = 2;
-                    block.lines_coords.forEach(linePolygon => {
-                        ctx.beginPath();
-                        ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
-                        for (let i = 1; i < linePolygon.length; i++) {
-                            ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
+                if (block.lines_coords) {
+                    block.lines_coords.forEach((linePolygon, lineIndex) => {
+                        const isSelected = selectedLines.some(
+                            sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex
+                        );
+                        
+                        if (showLines) {
+                            ctx.strokeStyle = isSelected ? '#facc15' : '#3b82f6'; // 選中為黃色，否則為藍色
+                            ctx.lineWidth = isSelected ? 4 : 2;
+                            ctx.beginPath();
+                            ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
+                            for (let i = 1; i < linePolygon.length; i++) {
+                                ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
+                            }
+                            ctx.closePath();
+                            ctx.stroke();
                         }
-                        ctx.closePath();
-                        ctx.stroke();
                     });
                 }
                 
-                // 3. 繪製文字內容和索引
-                if (showText && block.box) {
+                if (showText && block.box && block.box.length === 4) {
                     const [x1, y1] = block.box;
-                    const fontSize = Math.max(16, Math.round(block.font_size / 2));
+                    const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSize}px sans-serif`;
                     ctx.fillStyle = 'white';
                     ctx.strokeStyle = 'black';
                     ctx.lineWidth = 3;
-
-                    const textContent = `[${index}] ${block.lines.join(' ')}`;
-                    
-                    // 繪製帶有黑色邊框的白色文字，以確保可讀性
+                    const textContent = `[${blockIndex}] ${block.lines.join(' ')}`;
                     ctx.strokeText(textContent, x1, y1 - 5);
                     ctx.fillText(textContent, x1, y1 - 5);
                 }
             });
+        }
+
+        function isPointInPolygon(point, polygon) {
+            let isInside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                const intersect = ((yi > point.y) !== (yj > point.y))
+                    && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                if (intersect) isInside = !isInside;
+            }
+            return isInside;
         }
     </script>
 </body>
