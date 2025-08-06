@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (中位數合併版)</title>
+    <title>JSON 標註互動式編輯工具 (方向約束版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (中位數合併版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (方向約束版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -520,7 +520,9 @@
             // *** 核心修正：使用中位數計算字號 ***
             const fontSizes = linesToMerge.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
-            if (fontSizes.length % 2 === 0) {
+            if (fontSizes.length === 0) {
+                medianFontSize = 20; // Default
+            } else if (fontSizes.length % 2 === 0) {
                 const mid1 = fontSizes[fontSizes.length / 2 - 1];
                 const mid2 = fontSizes[fontSizes.length / 2];
                 medianFontSize = (mid1 + mid2) / 2;
@@ -531,7 +533,7 @@
             const newBlock = {
                 lines_coords: linesToMerge.map(l => l.coord),
                 lines: linesToMerge.map(l => l.text),
-                font_size: medianFontSize,
+                font_size: parseFloat(medianFontSize.toFixed(2)),
                 vertical: linesToMerge[0].block.vertical,
                 box: []
             };
@@ -702,9 +704,7 @@
             if (!text || text.length === 0) return 20;
 
             if (isVertical) {
-                const sizeLimitedByWidth = avgWidth;
-                const sizeLimitedByHeight = avgHeight / text.length;
-                return Math.min(sizeLimitedByWidth, sizeLimitedByHeight) * 0.98;
+                return (avgHeight / text.length) * 0.98;
             } else {
                 let fontSize = avgHeight;
                 ctx.font = `${fontSize}px sans-serif`;
