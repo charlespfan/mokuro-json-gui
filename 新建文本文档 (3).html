@@ -1,19 +1,14 @@
 <!DOCTYPE html>
-<html lang="ja-JP">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (字體修正版)</title>
+    <title>JSON 標註互動式編輯工具 (專業排版版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 核心修正：引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {
-            /* 核心修正：指定字體，Noto Sans JP 會優先用於日文，其他語言會回退到備用字體 */
-            font-family: 'Inter', 'Noto Sans JP', 'Microsoft JhengHei', '微軟正黑體', sans-serif;
+            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體', 'Noto Sans JP', sans-serif;
             background-color: #111827;
             color: #e5e7eb;
         }
@@ -69,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (字體修正版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (專業排版版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -185,6 +180,8 @@
         };
         const HANDLE_RADIUS = 8;
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
+        // *** 核心修正：新增小寫假名列表 ***
+        const CHARS_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
@@ -603,7 +600,7 @@
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
-                    ctx.font = `bold ${fontSizeLabel}px sans-serif`;
+                    ctx.font = `bold ${fontSizeLabel}px "Noto Sans JP", sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
                     const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
                     ctx.strokeText(labelContent, x1, y1 - 10);
@@ -668,7 +665,7 @@
             ctx.translate(center.x, center.y);
             ctx.rotate(angle);
 
-            ctx.font = `${fontSize}px sans-serif`;
+            ctx.font = `${fontSize}px "Noto Sans JP", sans-serif`;
             ctx.fillStyle = 'black';
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.lineWidth = 2;
@@ -680,16 +677,25 @@
                 let startY = -totalTextHeight / 2 + fontSize / 2;
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
+                    let charX = 0;
+                    let charY = startY + i * fontSize;
+
                     if (CHARS_TO_ROTATE.includes(char)) {
                         ctx.save();
-                        ctx.translate(0, startY + i * fontSize);
+                        ctx.translate(charX, charY);
                         ctx.rotate(Math.PI / 2);
                         ctx.strokeText(char, 0, 0);
                         ctx.fillText(char, 0, 0);
                         ctx.restore();
+                    } else if (CHARS_TOP_RIGHT.includes(char)) {
+                        // 小寫假名偏移到右上角
+                        const offsetX = fontSize * 0.10;
+                        const offsetY = fontSize * 0.10;
+                        ctx.strokeText(char, charX + offsetX, charY - offsetY);
+                        ctx.fillText(char, charX + offsetX, charY - offsetY);
                     } else {
-                        ctx.strokeText(char, 0, startY + i * fontSize);
-                        ctx.fillText(char, 0, startY + i * fontSize);
+                        ctx.strokeText(char, charX, charY);
+                        ctx.fillText(char, charX, charY);
                     }
                 }
             } else {
@@ -715,7 +721,7 @@
                 return (avgHeight / text.length);
             } else {
                 let fontSize = avgHeight;
-                ctx.font = `${fontSize}px sans-serif`;
+                ctx.font = `${fontSize}px "Noto Sans JP", sans-serif`;
                 const measuredWidth = ctx.measureText(text).width;
                 if (measuredWidth > avgWidth && measuredWidth > 0) {
                     fontSize = fontSize * (avgWidth / measuredWidth);
