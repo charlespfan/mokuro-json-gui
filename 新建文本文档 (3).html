@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>圖像透視校正 vs. 旋轉效果對比工具</title>
+    <title>JSON 標註結果視覺化工具</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 OpenCV.js -->
-    <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady();"></script>
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體';
             background-color: #111827; /* 深灰色背景 */
             color: #e5e7eb; /* 淺灰色文字 */
         }
@@ -28,6 +26,7 @@
             font-weight: 600;
             transition: background-color 0.3s, transform 0.2s;
             cursor: pointer;
+            text-align: center;
         }
         .btn-primary {
             background-color: #3b82f6;
@@ -36,125 +35,110 @@
         .btn-primary:hover {
             background-color: #2563eb;
         }
-        .btn-secondary {
-            background-color: #4b5563;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background-color: #374151;
-        }
         canvas {
-            cursor: crosshair;
             border-radius: 0.5rem;
             border: 2px dashed #4b5563;
-        }
-        #mainCanvas {
             max-width: 100%;
             height: auto;
-        }
-        .output-canvas {
             background-color: #374151;
-            width: 100%;
-            height: auto;
         }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3b82f6;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .checkbox {
+            width: 1.25rem;
+            height: 1.25rem;
+            margin-right: 0.5rem;
+            border-radius: 0.25rem;
+            accent-color: #3b82f6;
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">圖像透視校正 vs. 旋轉效果對比工具</h1>
-            <p class="mt-2 text-lg text-gray-400">上傳圖片，點擊四個角點，觀察「拉伸」與「旋轉」的區別。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註結果視覺化工具</h1>
+            <p class="mt-2 text-lg text-gray-400">上傳圖片和對應的 JSON 檔案，即可看到視覺化的標註結果。</p>
         </header>
 
-        <div class="card mb-8">
-            <div id="controls" class="flex flex-col sm:flex-row items-center gap-4">
-                <label for="fileInput" class="btn btn-primary">1. 選擇圖片</label>
-                <input type="file" id="fileInput" class="hidden">
-                <button id="resetButton" class="btn btn-secondary">重設標記</button>
-                <p id="status" class="text-gray-300 flex-grow">請先上傳一張圖片。</p>
-            </div>
-        </div>
-
-        <div id="loader" class="hidden items-center justify-center my-8">
-            <div class="loader"></div>
-            <p class="ml-4 text-lg">正在載入 OpenCV.js...</p>
-        </div>
-
-        <main id="app" class="hidden">
-            <div class="grid grid-cols-1 gap-8">
-                <!-- 輸入區域 -->
-                <div class="card">
-                    <h2 class="text-2xl font-semibold mb-4 text-white">操作區域</h2>
-                    <canvas id="mainCanvas"></canvas>
-                </div>
-
-                <!-- 輸出區域 -->
-                <div class="card">
-                    <h2 class="text-2xl font-semibold mb-4 text-white">結果對比</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h3 class="text-xl font-medium mb-2 text-center">拉伸 (透視校正)</h3>
-                            <canvas id="stretchOutput" class="output-canvas"></canvas>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-medium mb-2 text-center">旋轉</h3>
-                            <canvas id="rotateOutput" class="output-canvas"></canvas>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- 控制面板 -->
+            <div class="md:col-span-1">
+                <div class="card space-y-6">
+                    <div>
+                        <label for="imageInput" class="btn btn-primary w-full">1. 選擇圖片檔案</label>
+                        <input type="file" id="imageInput" class="hidden" accept="image/*">
+                        <p id="imageStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇圖片</p>
+                    </div>
+                    <div>
+                        <label for="jsonInput" class="btn btn-primary w-full">2. 選擇 JSON 檔案</label>
+                        <input type="file" id="jsonInput" class="hidden" accept=".json,application/json">
+                        <p id="jsonStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇 JSON</p>
+                    </div>
+                    
+                    <div class="border-t border-gray-600 pt-6">
+                        <h3 class="text-lg font-semibold mb-4">顯示選項</h3>
+                        <div class="space-y-3">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="showBlocks" class="checkbox" checked>
+                                顯示總體邊界框 (綠色)
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="showLines" class="checkbox" checked>
+                                顯示精確文字行 (藍色)
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="showText" class="checkbox" checked>
+                                顯示文字內容 (白色)
+                            </label>
                         </div>
                     </div>
                 </div>
             </div>
-        </main>
+
+            <!-- 畫布區域 -->
+            <div class="md:col-span-2">
+                <div class="card">
+                     <canvas id="mainCanvas"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        const fileInput = document.getElementById('fileInput');
+        const imageInput = document.getElementById('imageInput');
+        const jsonInput = document.getElementById('jsonInput');
         const mainCanvas = document.getElementById('mainCanvas');
-        const stretchOutput = document.getElementById('stretchOutput');
-        const rotateOutput = document.getElementById('rotateOutput');
-        const resetButton = document.getElementById('resetButton');
-        const status = document.getElementById('status');
-        const loader = document.getElementById('loader');
-        const app = document.getElementById('app');
-        
         const ctx = mainCanvas.getContext('2d');
-        let points = [];
+
+        const imageStatus = document.getElementById('imageStatus');
+        const jsonStatus = document.getElementById('jsonStatus');
+        
+        const showBlocksCheckbox = document.getElementById('showBlocks');
+        const showLinesCheckbox = document.getElementById('showLines');
+        const showTextCheckbox = document.getElementById('showText');
+
         let originalImage = null;
+        let jsonData = null;
 
-        function onOpenCvReady() {
-            loader.classList.add('hidden');
-            app.classList.remove('hidden');
-            status.textContent = "OpenCV 已就緒。請選擇一張圖片。";
+        function handleFiles() {
+            if (originalImage && jsonData) {
+                drawVisualizations();
+            }
         }
 
-        // 頁面載入時顯示載入動畫
-        if (typeof cv === 'undefined') {
-            loader.classList.remove('hidden');
-            app.classList.add('hidden');
-        } else {
-            onOpenCvReady();
-        }
-
-        fileInput.addEventListener('change', (e) => {
+        imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     originalImage = new Image();
                     originalImage.onload = () => {
-                        resetCanvas();
-                        status.textContent = '圖片已載入。請在圖上點擊4個角點 (建議順時針)。';
+                        imageStatus.textContent = `已載入: ${file.name}`;
+                        imageStatus.classList.add('text-green-400');
+                        handleFiles();
                     };
                     originalImage.src = event.target.result;
                 };
@@ -162,154 +146,85 @@
             }
         });
 
-        resetButton.addEventListener('click', () => {
-            if (originalImage) {
-                resetCanvas();
-                status.textContent = '標記已重設。請重新點擊4個角點。';
+        jsonInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        jsonData = JSON.parse(event.target.result);
+                        jsonStatus.textContent = `已載入: ${file.name}`;
+                        jsonStatus.classList.add('text-green-400');
+                        handleFiles();
+                    } catch (err) {
+                        jsonStatus.textContent = `JSON 解析錯誤: ${err.message}`;
+                        jsonStatus.classList.add('text-red-400');
+                    }
+                };
+                reader.readAsText(file);
             }
         });
-
-        mainCanvas.addEventListener('click', (e) => {
-            if (!originalImage || points.length >= 4) return;
-
-            const rect = mainCanvas.getBoundingClientRect();
-            const scaleX = mainCanvas.width / rect.width;
-            const scaleY = mainCanvas.height / rect.height;
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-            
-            points.push({ x, y });
-            drawPointsAndLines();
-
-            if (points.length < 4) {
-                status.textContent = `已選擇 ${points.length}/4 個點。`;
-            }
-
-            if (points.length === 4) {
-                status.textContent = '4個點已選擇完畢，正在處理...';
-                // 使用 setTimeout 確保畫面更新後再執行耗時操作
-                setTimeout(processTransformations, 50);
-            }
+        
+        [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(checkbox => {
+            checkbox.addEventListener('change', handleFiles);
         });
 
-        function drawPointsAndLines() {
+        function drawVisualizations() {
+            if (!originalImage || !jsonData) return;
+
+            // 設定畫布尺寸與圖片一致
+            mainCanvas.width = jsonData.img_width || originalImage.width;
+            mainCanvas.height = jsonData.img_height || originalImage.height;
+
+            // 繪製底圖
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             ctx.drawImage(originalImage, 0, 0, mainCanvas.width, mainCanvas.height);
-            
-            ctx.strokeStyle = '#3b82f6'; // 藍色
-            ctx.fillStyle = '#ef4444'; // 紅色
-            ctx.lineWidth = 3;
 
-            // 畫線
-            if (points.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(points[0].x, points[0].y);
-                for (let i = 1; i < points.length; i++) {
-                    ctx.lineTo(points[i].x, points[i].y);
-                }
-                if (points.length === 4) {
-                    ctx.closePath();
-                }
-                ctx.stroke();
-            }
+            const showBlocks = showBlocksCheckbox.checked;
+            const showLines = showLinesCheckbox.checked;
+            const showText = showTextCheckbox.checked;
 
-            // 畫點
-            points.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 8, 0, 2 * Math.PI);
-                ctx.fill();
+            // 遍歷所有文字區塊
+            jsonData.blocks.forEach((block, index) => {
+                // 1. 繪製總體邊界框 (綠色)
+                if (showBlocks && block.box) {
+                    ctx.strokeStyle = '#22c55e'; // 綠色
+                    ctx.lineWidth = 4;
+                    const [x1, y1, x2, y2] = block.box;
+                    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                }
+
+                // 2. 繪製精確文字行 (藍色)
+                if (showLines && block.lines_coords) {
+                    ctx.strokeStyle = '#3b82f6'; // 藍色
+                    ctx.lineWidth = 2;
+                    block.lines_coords.forEach(linePolygon => {
+                        ctx.beginPath();
+                        ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
+                        for (let i = 1; i < linePolygon.length; i++) {
+                            ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
+                        }
+                        ctx.closePath();
+                        ctx.stroke();
+                    });
+                }
+                
+                // 3. 繪製文字內容和索引
+                if (showText && block.box) {
+                    const [x1, y1] = block.box;
+                    const fontSize = Math.max(16, Math.round(block.font_size / 2));
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    ctx.fillStyle = 'white';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 3;
+
+                    const textContent = `[${index}] ${block.lines.join(' ')}`;
+                    
+                    // 繪製帶有黑色邊框的白色文字，以確保可讀性
+                    ctx.strokeText(textContent, x1, y1 - 5);
+                    ctx.fillText(textContent, x1, y1 - 5);
+                }
             });
-        }
-        
-        function resetCanvas() {
-            points = [];
-            mainCanvas.width = originalImage.width;
-            mainCanvas.height = originalImage.height;
-            ctx.drawImage(originalImage, 0, 0);
-            
-            // 清空輸出畫布
-            const outCtx1 = stretchOutput.getContext('2d');
-            outCtx1.clearRect(0, 0, stretchOutput.width, stretchOutput.height);
-            const outCtx2 = rotateOutput.getContext('2d');
-            outCtx2.clearRect(0, 0, rotateOutput.width, rotateOutput.height);
-        }
-
-        function processTransformations() {
-            try {
-                // 讀取圖像到 OpenCV Mat
-                let src = cv.imread(originalImage);
-
-                // 1. 處理透視校正 (拉伸)
-                processStretching(src);
-
-                // 2. 處理旋轉
-                processRotation(src);
-
-                src.delete();
-                status.textContent = '處理完成！點擊「重設標記」可重新操作。';
-
-            } catch (err) {
-                console.error(err);
-                status.textContent = `處理出錯: ${err.message}`;
-            }
-        }
-
-        function processStretching(src) {
-            // 計算目標矩形的寬高
-            const [tl, tr, br, bl] = points; // 假設順時針: top-left, top-right, bottom-right, bottom-left
-            const widthA = Math.hypot(br.x - bl.x, br.y - bl.y);
-            const widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y);
-            const maxWidth = Math.max(widthA, widthB);
-
-            const heightA = Math.hypot(tr.x - br.x, tr.y - br.y);
-            const heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y);
-            const maxHeight = Math.max(heightA, heightB);
-
-            const destWidth = Math.round(maxWidth);
-            const destHeight = Math.round(maxHeight);
-
-            // 定義來源點和目標點
-            let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
-            let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, destWidth - 1, 0, destWidth - 1, destHeight - 1, 0, destHeight - 1]);
-            
-            // 計算變換矩陣並應用
-            let M = cv.getPerspectiveTransform(srcTri, dstTri);
-            let dsize = new cv.Size(destWidth, destHeight);
-            let warped = new cv.Mat();
-            cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-            // 顯示結果
-            cv.imshow(stretchOutput, warped);
-            
-            // 釋放記憶體
-            srcTri.delete();
-            dstTri.delete();
-            M.delete();
-            warped.delete();
-        }
-
-        function processRotation(src) {
-            // 使用第3和第4個點 (假設為左下和右下) 來計算角度
-            const [,, br, bl] = points;
-            const dx = br.x - bl.x;
-            const dy = br.y - bl.y;
-            const angleInDegrees = Math.atan2(dy, dx) * 180 / Math.PI;
-
-            // 獲取圖像中心點
-            let center = new cv.Point(src.cols / 2, src.rows / 2);
-            
-            // 計算旋轉矩陣並應用
-            let M = cv.getRotationMatrix2D(center, angleInDegrees, 1);
-            let dsize = new cv.Size(src.cols, src.rows);
-            let rotated = new cv.Mat();
-            cv.warpAffine(src, rotated, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-            // 顯示結果
-            cv.imshow(rotateOutput, rotated);
-
-            // 釋放記憶體
-            M.delete();
-            rotated.delete();
         }
     </script>
 </body>
