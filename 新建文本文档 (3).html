@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (批次修正版)</title>
+    <title>JSON 標註互動式編輯工具 (尋找取代版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (批次修正版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (尋找取代版)</h1>
             <p class="mt-2 text-lg text-gray-400">支援批次匯入、編輯與儲存，大幅提升效率。</p>
         </header>
 
@@ -95,6 +95,14 @@
                             <button id="prevFileBtn" class="btn btn-secondary">上一張</button>
                             <span id="fileCounter" class="font-semibold text-lg"></span>
                             <button id="nextFileBtn" class="btn btn-secondary">下一張</button>
+                        </div>
+                    </div>
+
+                    <!-- 預處理 -->
+                    <div class="border-t border-gray-600 pt-6">
+                        <h3 class="text-lg font-semibold mb-4">預處理</h3>
+                        <div id="preprocessPanel" class="space-y-4 opacity-50 pointer-events-none">
+                            <button id="replaceBtn" class="btn btn-warning w-full">套用固定取代規則</button>
                         </div>
                     </div>
 
@@ -160,6 +168,8 @@
         const showBlocksCheckbox = document.getElementById('showBlocks');
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
+        const preprocessPanel = document.getElementById('preprocessPanel');
+        const replaceBtn = document.getElementById('replaceBtn');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
@@ -206,6 +216,7 @@
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
+        replaceBtn.addEventListener('click', applyFixedReplacements);
 
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -252,7 +263,7 @@
             imageFiles.forEach(imgFile => {
                 const baseName = imgFile.name.substring(0, imgFile.name.lastIndexOf('.'));
                 if (jsonMap.has(baseName)) {
-                    matchedFiles.push({ image: imgFile, json: jsonMap.get(baseName) });
+                    matchedFiles.push({ image: imgFile, json: jsonMap.get(baseName), modifiedJsonData: null });
                 }
             });
             
@@ -278,7 +289,7 @@
         }
 
         async function loadFile(index) {
-            const { image, json } = matchedFiles[index];
+            const currentPair = matchedFiles[index];
             
             const imagePromise = new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -289,28 +300,33 @@
                     originalImage.src = event.target.result;
                 };
                 reader.onerror = reject;
-                reader.readAsDataURL(image);
+                reader.readAsDataURL(currentPair.image);
             });
 
-            const jsonPromise = new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        jsonData = JSON.parse(event.target.result);
-                        originalJsonFilename = json.name;
-                        resolve();
-                    } catch (e) {
-                        reject(e);
-                    }
-                };
-                reader.onerror = reject;
-                reader.readAsText(json);
-            });
+            // 如果有修改過的 JSON，就用它，否則讀取原始檔案
+            if (currentPair.modifiedJsonData) {
+                jsonData = currentPair.modifiedJsonData;
+                originalJsonFilename = currentPair.json.name;
+            } else {
+                await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            jsonData = JSON.parse(event.target.result);
+                            originalJsonFilename = currentPair.json.name;
+                            resolve();
+                        } catch (e) { reject(e); }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsText(currentPair.json);
+                });
+            }
 
             try {
-                await Promise.all([imagePromise, jsonPromise]);
+                await imagePromise;
                 
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
+                preprocessPanel.classList.remove('opacity-50', 'pointer-events-none');
                 exportBtn.classList.remove('opacity-50', 'pointer-events-none');
                 fileCounter.textContent = `${index + 1} / ${matchedFiles.length}`;
                 prevFileBtn.disabled = index === 0;
@@ -319,10 +335,82 @@
                 resetSelectionAndRedraw();
             } catch (error) {
                 console.error("Error loading file pair:", error);
-                alert(`載入檔案 ${image.name} 或 ${json.name} 時出錯。`);
+                alert(`載入檔案 ${currentPair.image.name} 或 ${currentPair.json.name} 時出錯。`);
             }
         }
 
+
+        // --- 預處理 ---
+        async function applyFixedReplacements() {
+            if (!jsonData) return;
+
+            const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
+
+            const replacements = [
+                ["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"],
+                ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"],
+                ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"],
+                ["（", "("], ["）", ")"], ["／", "！"],
+                ["〝", "“"], ["〟", "”"], ["：", "…"], ["；", "…"],
+                ["ＯＯ", "００"]
+            ];
+
+            let totalReplacements = 0;
+            let filesAffected = 0;
+
+            const processJson = (data) => {
+                let count = 0;
+                data.blocks.forEach(block => {
+                    block.lines = block.lines.map(line => {
+                        let originalLine = line;
+                        for (const [find, replace] of replacements) {
+                            line = line.replaceAll(find, replace);
+                        }
+                        if (originalLine !== line) {
+                            count++;
+                        }
+                        return line;
+                    });
+                });
+                return count;
+            };
+
+            if (scope) { // 處理所有檔案
+                for (let i = 0; i < matchedFiles.length; i++) {
+                    const pair = matchedFiles[i];
+                    let dataToProcess;
+                    if (pair.modifiedJsonData) {
+                        dataToProcess = pair.modifiedJsonData;
+                    } else {
+                        const jsonText = await pair.json.text();
+                        dataToProcess = JSON.parse(jsonText);
+                    }
+                    
+                    const replacementsCount = processJson(dataToProcess);
+                    if (replacementsCount > 0) {
+                        pair.modifiedJsonData = dataToProcess;
+                        totalReplacements += replacementsCount;
+                        filesAffected++;
+                    }
+                }
+                // 更新當前檢視
+                if (matchedFiles[currentFileIndex].modifiedJsonData) {
+                    jsonData = matchedFiles[currentFileIndex].modifiedJsonData;
+                }
+            } else { // 僅處理當前檔案
+                const replacementsCount = processJson(jsonData);
+                if (replacementsCount > 0) {
+                    totalReplacements = replacementsCount;
+                    filesAffected = 1;
+                    if (matchedFiles.length > 0) {
+                        matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
+                    }
+                }
+            }
+            
+            alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
+            drawVisualizations();
+        }
 
         // --- 編輯模式切換 ---
         function toggleDrawMode() {
