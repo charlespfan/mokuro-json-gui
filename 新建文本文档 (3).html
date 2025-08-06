@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (字號控制版)</title>
+    <title>JSON 標註互動式編輯工具 (專業排版版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (字號控制版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (專業排版版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -176,6 +176,7 @@
             startAngle: 0
         };
         const HANDLE_RADIUS = 8;
+        const CHARS_TO_ROTATE = "…—~()[]{}<>（）【】《》";
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
@@ -556,8 +557,8 @@
                     ctx.font = `bold ${fontSizeLabel}px sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
                     const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
-                    ctx.strokeText(labelContent, x1, y1 - 5);
-                    ctx.fillText(labelContent, x1, y1 - 5);
+                    ctx.strokeText(labelContent, x1, y1 - 10);
+                    ctx.fillText(labelContent, x1, y1 - 10);
                 }
 
                 if (block.lines_coords) {
@@ -610,7 +611,7 @@
         }
         
         function drawTextInPolygon(text, polygon, isVertical, fontSize = 20) {
-            const p0 = polygon[0], p1 = polygon[1], p3 = polygon[3];
+            const p0 = polygon[0], p1 = polygon[1];
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
             const center = getPolygonCenter(polygon);
 
@@ -620,8 +621,8 @@
 
             ctx.font = `${fontSize}px sans-serif`;
             ctx.fillStyle = 'black';
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 2;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
@@ -629,8 +630,18 @@
                 const totalTextHeight = text.length * fontSize;
                 let startY = -totalTextHeight / 2 + fontSize / 2;
                 for (let i = 0; i < text.length; i++) {
-                    ctx.strokeText(text[i], 0, startY + i * fontSize);
-                    ctx.fillText(text[i], 0, startY + i * fontSize);
+                    const char = text[i];
+                    if (CHARS_TO_ROTATE.includes(char)) {
+                        ctx.save();
+                        ctx.translate(0, startY + i * fontSize);
+                        ctx.rotate(Math.PI / 2);
+                        ctx.strokeText(char, 0, 0);
+                        ctx.fillText(char, 0, 0);
+                        ctx.restore();
+                    } else {
+                        ctx.strokeText(char, 0, startY + i * fontSize);
+                        ctx.fillText(char, 0, startY + i * fontSize);
+                    }
                 }
             } else {
                 ctx.strokeText(text, 0, 0);
