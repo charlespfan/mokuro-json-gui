@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終版)</title>
+    <title>JSON 標註互動式編輯工具 (完全版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -37,6 +37,8 @@
         .btn-success:hover { background-color: #16a34a; }
         .btn-warning { background-color: #f59e0b; color: white; }
         .btn-warning:hover { background-color: #d97706; }
+        .btn-info { background-color: #0ea5e9; color: white; }
+        .btn-info:hover { background-color: #0284c7; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
         .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
@@ -56,8 +58,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (最終版)</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、刪除、新增、匯出，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (完全版)</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、新增、修改文字，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -90,6 +92,8 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
+                                <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分 Block</button>
+                                <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
                             </div>
                         </div>
                     </div>
@@ -137,6 +141,8 @@
         const drawModeBtn = document.getElementById('drawModeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
+        const splitBtn = document.getElementById('splitBtn');
+        const editTextBtn = document.getElementById('editTextBtn');
         const exportBtn = document.getElementById('exportBtn');
 
         // 應用程式狀態
@@ -155,6 +161,8 @@
         drawModeBtn.addEventListener('click', toggleDrawMode);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
+        splitBtn.addEventListener('click', splitSelectedBlock);
+        editTextBtn.addEventListener('click', editSelectedLineText);
         exportBtn.addEventListener('click', exportJson);
         mainCanvas.addEventListener('click', handleCanvasClick);
 
@@ -230,12 +238,10 @@
         // --- 畫布點擊處理 ---
         function handleCanvasClick(e) {
             if (!isSelectMode && !isDrawingMode) return;
-
             const rect = mainCanvas.getBoundingClientRect();
             const scaleX = mainCanvas.width / rect.width;
             const scaleY = mainCanvas.height / rect.height;
             const clickPoint = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-
             if (isSelectMode) handleSelection(clickPoint);
             if (isDrawingMode) handleDrawing(clickPoint);
         }
@@ -262,31 +268,25 @@
             newPolygonPoints.push([point.x, point.y]);
             drawModeBtn.textContent = `正在繪製 (${newPolygonPoints.length}/4)`;
             if (newPolygonPoints.length === 4) {
-                addNewLine();
-                setMode(false, false); // 繪製完成後自動退出模式
+                const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
+                if (text !== null) { // Check if user clicked OK
+                    addNewLine(text);
+                }
+                setMode(false, false);
             }
             drawVisualizations();
         }
 
         // --- 核心編輯邏輯 ---
-        function addNewLine() {
+        function addNewLine(text) {
             const newBlock = {
                 box: [],
                 vertical: false,
-                font_size: 20, // 預設字號
+                font_size: 20,
                 lines_coords: [newPolygonPoints],
-                lines: ["(新增)"] // 預設文字
+                lines: [text]
             };
-            
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            newPolygonPoints.forEach(p => {
-                minX = Math.min(minX, p[0]);
-                minY = Math.min(minY, p[1]);
-                maxX = Math.max(maxX, p[0]);
-                maxY = Math.max(maxY, p[1]);
-            });
-            newBlock.box = [minX, minY, maxX, maxY];
-            
+            recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
             newPolygonPoints = [];
         }
@@ -307,6 +307,41 @@
             mergeBtn.disabled = count < 2;
             deleteBtn.textContent = `刪除 (${count})`;
             deleteBtn.disabled = count < 1;
+            splitBtn.disabled = count !== 1 || (count === 1 && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
+            editTextBtn.disabled = count !== 1;
+        }
+        
+        function editSelectedLineText() {
+            if (selectedLines.length !== 1) return;
+            const { blockIndex, lineIndex } = selectedLines[0];
+            const currentText = jsonData.blocks[blockIndex].lines[lineIndex];
+            const newText = prompt("請輸入新的文字內容:", currentText);
+            if (newText !== null && newText !== currentText) {
+                jsonData.blocks[blockIndex].lines[lineIndex] = newText;
+                drawVisualizations();
+            }
+        }
+
+        function splitSelectedBlock() {
+            if (selectedLines.length !== 1) return;
+            const { blockIndex } = selectedLines[0];
+            const blockToSplit = jsonData.blocks[blockIndex];
+            if (blockToSplit.lines.length < 2) return;
+
+            const newBlocks = blockToSplit.lines.map((lineText, lineIndex) => {
+                const newBlock = {
+                    ...blockToSplit, // Inherit properties like vertical, font_size
+                    lines: [lineText],
+                    lines_coords: [blockToSplit.lines_coords[lineIndex]],
+                    box: []
+                };
+                recalculateBoxForBlock(newBlock);
+                return newBlock;
+            });
+            
+            // Remove the old block and add the new ones
+            jsonData.blocks.splice(blockIndex, 1, ...newBlocks);
+            setMode(false, false);
         }
 
         function mergeSelectedLines() {
@@ -321,36 +356,29 @@
                 lines_coords: linesToMerge.map(l => l.coord),
                 lines: linesToMerge.map(l => l.text),
                 font_size: linesToMerge.reduce((sum, l) => sum + (l.block.font_size || 0), 0) / linesToMerge.length,
-                vertical: linesToMerge[0].block.vertical
+                vertical: linesToMerge[0].block.vertical,
+                box: []
             };
             
-            deleteSelectedLines(false); // 刪除但不重繪
-            
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            newBlock.lines_coords.forEach(poly => poly.forEach(p => {
-                minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
-                maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]);
-            }));
-            newBlock.box = [minX, minY, maxX, maxY];
-            
+            deleteSelectedLines(false);
+            recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
             setMode(false, false);
         }
 
         function deleteSelectedLines(resetMode = true) {
             if (selectedLines.length < 1) return;
-            
             selectedLines.sort((a, b) => b.blockIndex - a.blockIndex || b.lineIndex - a.lineIndex);
             
             selectedLines.forEach(sel => {
                 const block = jsonData.blocks[sel.blockIndex];
                 block.lines_coords.splice(sel.lineIndex, 1);
                 block.lines.splice(sel.lineIndex, 1);
+                recalculateBoxForBlock(block);
             });
             
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
-            
-            if(resetMode) setMode(false, false);
+            if (resetMode) setMode(false, false);
         }
 
         function exportJson() {
@@ -370,7 +398,6 @@
         // --- 繪圖與輔助 ---
         function drawVisualizations() {
             if (!originalImage || !jsonData) return;
-
             mainCanvas.width = jsonData.img_width || originalImage.width;
             mainCanvas.height = jsonData.img_height || originalImage.height;
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
@@ -402,7 +429,7 @@
                     });
                 }
                 
-                if (showText && block.box && block.box.length === 4) {
+                if (showText && block.box && block.box.length === 4 && block.lines.length > 0) {
                     const [x1, y1] = block.box;
                     const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSize}px sans-serif`;
@@ -439,6 +466,16 @@
                 if (intersect) isInside = !isInside;
             }
             return isInside;
+        }
+        
+        function recalculateBoxForBlock(block) {
+            if (!block || !block.lines_coords || block.lines_coords.length === 0) return;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            block.lines_coords.forEach(poly => poly.forEach(p => {
+                minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
+                maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]);
+            }));
+            block.box = [minX, minY, maxX, maxY];
         }
     </script>
 </body>
