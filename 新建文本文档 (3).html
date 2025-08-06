@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圖像透視校正 vs. 旋轉效果對比工具</title>
+    <!-- 引入 Tailwind CSS 以美化介面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 OpenCV.js -->
+    <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady();"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* 深灰色背景 */
+            color: #e5e7eb; /* 淺灰色文字 */
+        }
+        .card {
+            background-color: #1f2937; /* 卡片背景色 */
+            border: 1px solid #374151; /* 邊框顏色 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.3s, transform 0.2s;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .btn-secondary {
+            background-color: #4b5563;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #374151;
+        }
+        canvas {
+            cursor: crosshair;
+            border-radius: 0.5rem;
+            border: 2px dashed #4b5563;
+        }
+        #mainCanvas {
+            max-width: 100%;
+            height: auto;
+        }
+        .output-canvas {
+            background-color: #374151;
+            width: 100%;
+            height: auto;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">圖像透視校正 vs. 旋轉效果對比工具</h1>
+            <p class="mt-2 text-lg text-gray-400">上傳圖片，點擊四個角點，觀察「拉伸」與「旋轉」的區別。</p>
+        </header>
+
+        <div class="card mb-8">
+            <div id="controls" class="flex flex-col sm:flex-row items-center gap-4">
+                <label for="fileInput" class="btn btn-primary">1. 選擇圖片</label>
+                <input type="file" id="fileInput" class="hidden">
+                <button id="resetButton" class="btn btn-secondary">重設標記</button>
+                <p id="status" class="text-gray-300 flex-grow">請先上傳一張圖片。</p>
+            </div>
+        </div>
+
+        <div id="loader" class="hidden items-center justify-center my-8">
+            <div class="loader"></div>
+            <p class="ml-4 text-lg">正在載入 OpenCV.js...</p>
+        </div>
+
+        <main id="app" class="hidden">
+            <div class="grid grid-cols-1 gap-8">
+                <!-- 輸入區域 -->
+                <div class="card">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">操作區域</h2>
+                    <canvas id="mainCanvas"></canvas>
+                </div>
+
+                <!-- 輸出區域 -->
+                <div class="card">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">結果對比</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-xl font-medium mb-2 text-center">拉伸 (透視校正)</h3>
+                            <canvas id="stretchOutput" class="output-canvas"></canvas>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-medium mb-2 text-center">旋轉</h3>
+                            <canvas id="rotateOutput" class="output-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const mainCanvas = document.getElementById('mainCanvas');
+        const stretchOutput = document.getElementById('stretchOutput');
+        const rotateOutput = document.getElementById('rotateOutput');
+        const resetButton = document.getElementById('resetButton');
+        const status = document.getElementById('status');
+        const loader = document.getElementById('loader');
+        const app = document.getElementById('app');
+        
+        const ctx = mainCanvas.getContext('2d');
+        let points = [];
+        let originalImage = null;
+
+        function onOpenCvReady() {
+            loader.classList.add('hidden');
+            app.classList.remove('hidden');
+            status.textContent = "OpenCV 已就緒。請選擇一張圖片。";
+        }
+
+        // 頁面載入時顯示載入動畫
+        if (typeof cv === 'undefined') {
+            loader.classList.remove('hidden');
+            app.classList.add('hidden');
+        } else {
+            onOpenCvReady();
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    originalImage = new Image();
+                    originalImage.onload = () => {
+                        resetCanvas();
+                        status.textContent = '圖片已載入。請在圖上點擊4個角點 (建議順時針)。';
+                    };
+                    originalImage.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        resetButton.addEventListener('click', () => {
+            if (originalImage) {
+                resetCanvas();
+                status.textContent = '標記已重設。請重新點擊4個角點。';
+            }
+        });
+
+        mainCanvas.addEventListener('click', (e) => {
+            if (!originalImage || points.length >= 4) return;
+
+            const rect = mainCanvas.getBoundingClientRect();
+            const scaleX = mainCanvas.width / rect.width;
+            const scaleY = mainCanvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            points.push({ x, y });
+            drawPointsAndLines();
+
+            if (points.length < 4) {
+                status.textContent = `已選擇 ${points.length}/4 個點。`;
+            }
+
+            if (points.length === 4) {
+                status.textContent = '4個點已選擇完畢，正在處理...';
+                // 使用 setTimeout 確保畫面更新後再執行耗時操作
+                setTimeout(processTransformations, 50);
+            }
+        });
+
+        function drawPointsAndLines() {
+            ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            ctx.drawImage(originalImage, 0, 0, mainCanvas.width, mainCanvas.height);
+            
+            ctx.strokeStyle = '#3b82f6'; // 藍色
+            ctx.fillStyle = '#ef4444'; // 紅色
+            ctx.lineWidth = 3;
+
+            // 畫線
+            if (points.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                if (points.length === 4) {
+                    ctx.closePath();
+                }
+                ctx.stroke();
+            }
+
+            // 畫點
+            points.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+        
+        function resetCanvas() {
+            points = [];
+            mainCanvas.width = originalImage.width;
+            mainCanvas.height = originalImage.height;
+            ctx.drawImage(originalImage, 0, 0);
+            
+            // 清空輸出畫布
+            const outCtx1 = stretchOutput.getContext('2d');
+            outCtx1.clearRect(0, 0, stretchOutput.width, stretchOutput.height);
+            const outCtx2 = rotateOutput.getContext('2d');
+            outCtx2.clearRect(0, 0, rotateOutput.width, rotateOutput.height);
+        }
+
+        function processTransformations() {
+            try {
+                // 讀取圖像到 OpenCV Mat
+                let src = cv.imread(originalImage);
+
+                // 1. 處理透視校正 (拉伸)
+                processStretching(src);
+
+                // 2. 處理旋轉
+                processRotation(src);
+
+                src.delete();
+                status.textContent = '處理完成！點擊「重設標記」可重新操作。';
+
+            } catch (err) {
+                console.error(err);
+                status.textContent = `處理出錯: ${err.message}`;
+            }
+        }
+
+        function processStretching(src) {
+            // 計算目標矩形的寬高
+            const [tl, tr, br, bl] = points; // 假設順時針: top-left, top-right, bottom-right, bottom-left
+            const widthA = Math.hypot(br.x - bl.x, br.y - bl.y);
+            const widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+            const maxWidth = Math.max(widthA, widthB);
+
+            const heightA = Math.hypot(tr.x - br.x, tr.y - br.y);
+            const heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y);
+            const maxHeight = Math.max(heightA, heightB);
+
+            const destWidth = Math.round(maxWidth);
+            const destHeight = Math.round(maxHeight);
+
+            // 定義來源點和目標點
+            let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+            let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, destWidth - 1, 0, destWidth - 1, destHeight - 1, 0, destHeight - 1]);
+            
+            // 計算變換矩陣並應用
+            let M = cv.getPerspectiveTransform(srcTri, dstTri);
+            let dsize = new cv.Size(destWidth, destHeight);
+            let warped = new cv.Mat();
+            cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            // 顯示結果
+            cv.imshow(stretchOutput, warped);
+            
+            // 釋放記憶體
+            srcTri.delete();
+            dstTri.delete();
+            M.delete();
+            warped.delete();
+        }
+
+        function processRotation(src) {
+            // 使用第3和第4個點 (假設為左下和右下) 來計算角度
+            const [,, br, bl] = points;
+            const dx = br.x - bl.x;
+            const dy = br.y - bl.y;
+            const angleInDegrees = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            // 獲取圖像中心點
+            let center = new cv.Point(src.cols / 2, src.rows / 2);
+            
+            // 計算旋轉矩陣並應用
+            let M = cv.getRotationMatrix2D(center, angleInDegrees, 1);
+            let dsize = new cv.Size(src.cols, src.rows);
+            let rotated = new cv.Mat();
+            cv.warpAffine(src, rotated, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+            // 顯示結果
+            cv.imshow(rotateOutput, rotated);
+
+            // 釋放記憶體
+            M.delete();
+            rotated.delete();
+        }
+    </script>
+</body>
+</html>
