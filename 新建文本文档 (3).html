@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (引號修正版)</title>
+    <title>JSON 標註互動式編輯工具 (波浪號修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體', 'Noto Sans JP', sans-serif;
+            font-family: 'Meiryo UI', sans-serif, 'Meiryo UI', sans-serif;
             background-color: #111827;
             color: #e5e7eb;
         }
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (引號修正版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (波浪號修正版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -161,6 +161,7 @@
         // 應用程式狀態
         let originalImage = null;
         let jsonData = null;
+        let originalJsonFilename = 'annotations.json';
         let isDrawingMode = false;
         let selectedLines = []; // 用於多選
         let activeTarget = null; // 用於單選變形 { blockIndex, lineIndex }
@@ -178,8 +179,8 @@
             startAngle: 0
         };
         const HANDLE_RADIUS = 8;
-        // *** 核心修正：加入了完整的標點符號列表 ***
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～｛｝｢｣〝〟";
+        // *** 核心修正：加入了 U+301C WAVE DASH ***
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
@@ -221,6 +222,7 @@
         function loadJson(e) {
             const file = e.target.files[0];
             if (!file) return;
+            originalJsonFilename = file.name;
             const reader = new FileReader();
             reader.onload = (event) => {
                 try {
@@ -569,8 +571,10 @@
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
+            
             a.href = url;
-            a.download = 'modified_annotations.json';
+            a.download = originalJsonFilename;
+            
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -704,7 +708,7 @@
             if (!text || text.length === 0) return 20;
 
             if (isVertical) {
-                return (avgHeight / text.length) * 0.98;
+                return (avgHeight / text.length);
             } else {
                 let fontSize = avgHeight;
                 ctx.font = `${fontSize}px sans-serif`;
@@ -712,7 +716,7 @@
                 if (measuredWidth > avgWidth && measuredWidth > 0) {
                     fontSize = fontSize * (avgWidth / measuredWidth);
                 }
-                return fontSize * 0.98;
+                return fontSize;
             }
         }
 
