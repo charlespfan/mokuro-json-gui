@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (尋找取代版)</title>
+    <title>JSON 標註互動式編輯工具 (專業排版最終版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,17 +68,17 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (尋找取代版)</h1>
-            <p class="mt-2 text-lg text-gray-400">支援批次匯入、編輯與儲存，大幅提升效率。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (專業排版最終版)</h1>
+            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             <!-- 控制面板 -->
             <div class="md:col-span-1">
                 <div class="card space-y-6">
-                    <!-- 批次處理 -->
+                    <!-- 檔案選擇 -->
                     <div>
-                        <h3 class="text-lg font-semibold mb-4">批次處理</h3>
+                        <h3 class="text-lg font-semibold mb-4">1. 載入檔案</h3>
                         <div class="space-y-4">
                             <div>
                                 <label for="imageFolderInput" class="btn btn-primary w-full">選擇圖片資料夾</label>
@@ -208,8 +208,7 @@
         };
         const HANDLE_RADIUS = 8;
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
-        const CHARS_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ、。";
-        const CHAR_WAVE_DASH = "〜";
+        const CHARS_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ、。､";
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -303,7 +302,6 @@
                 reader.readAsDataURL(currentPair.image);
             });
 
-            // 如果有修改過的 JSON，就用它，否則讀取原始檔案
             if (currentPair.modifiedJsonData) {
                 jsonData = currentPair.modifiedJsonData;
                 originalJsonFilename = currentPair.json.name;
@@ -352,7 +350,7 @@
                 ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"],
                 ["（", "("], ["）", ")"], ["／", "！"],
                 ["〝", "“"], ["〟", "”"], ["：", "…"], ["；", "…"],
-                ["ＯＯ", "００"]
+                ["ＯＯ", "００"], ["、", "､"]
             ];
 
             let totalReplacements = 0;
@@ -393,7 +391,6 @@
                         filesAffected++;
                     }
                 }
-                // 更新當前檢視
                 if (matchedFiles[currentFileIndex].modifiedJsonData) {
                     jsonData = matchedFiles[currentFileIndex].modifiedJsonData;
                 }
@@ -577,6 +574,7 @@
             const newBlock = { box: [], vertical: true, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
         }
 
         function toggleLineSelection(blockIndex, lineIndex) {
@@ -607,6 +605,7 @@
             const newText = prompt("請輸入新的文字內容:", jsonData.blocks[blockIndex].lines[lineIndex]);
             if (newText !== null) {
                 jsonData.blocks[blockIndex].lines[lineIndex] = newText;
+                if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                 resetSelectionAndRedraw();
             }
         }
@@ -619,6 +618,7 @@
             const newStatus = block.vertical ? "橫排" : "豎排";
             if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
                 block.vertical = !block.vertical;
+                if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                 resetSelectionAndRedraw();
             }
         }
@@ -632,6 +632,7 @@
                 const parsedSize = parseFloat(newSize);
                 if (!isNaN(parsedSize) && parsedSize > 0) {
                     block.font_size = parsedSize;
+                    if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                     resetSelectionAndRedraw();
                 } else {
                     alert("請輸入有效的數字！");
@@ -661,6 +662,7 @@
                 });
                 block.font_size = parseFloat(minFontSize.toFixed(2));
             });
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -675,6 +677,7 @@
                 return newBlock;
             });
             jsonData.blocks.splice(blockIndex, 1, ...newBlocks);
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -708,6 +711,7 @@
             deleteSelectedLines(false);
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -721,6 +725,7 @@
                 recalculateBoxForBlock(block);
             });
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             if (redraw) resetSelectionAndRedraw();
         }
         
@@ -821,6 +826,11 @@
             }
         }
         
+        function isHalfWidth(char) {
+            const code = char.charCodeAt(0);
+            return (code >= 0x0020 && code <= 0x007E) || (code >= 0xFF61 && code <= 0xFF9F);
+        }
+
         function drawTextInPolygon(text, polygon, isVertical, fontSize = 20) {
             const p0 = polygon[0], p1 = polygon[1];
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
@@ -830,7 +840,8 @@
             ctx.translate(center.x, center.y);
             ctx.rotate(angle);
 
-            ctx.font = `${fontSize}px "Noto Sans JP", sans-serif`;
+            const font = `${fontSize}px "Noto Sans JP", sans-serif`;
+            ctx.font = font;
             ctx.fillStyle = 'black';
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.lineWidth = 2;
@@ -838,57 +849,55 @@
             ctx.textBaseline = 'middle';
 
             if (isVertical) {
-                const totalTextHeight = text.length * fontSize;
-                let startY = -totalTextHeight / 2 + fontSize / 2;
+                let totalTextHeight = 0;
+                for (const char of text) {
+                    totalTextHeight += isHalfWidth(char) ? fontSize * 0.5 : fontSize;
+                }
+
+                let currentY = -totalTextHeight / 2;
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
-                    let charX = 0;
-                    let charY = startY + i * fontSize;
-
+                    const charHeight = isHalfWidth(char) ? fontSize * 0.5 : fontSize;
+                    const charY = currentY + charHeight / 2;
+                    
                     if (CHARS_TO_ROTATE.includes(char)) {
                         ctx.save();
-                        ctx.translate(charX, charY);
+                        ctx.translate(0, charY);
                         ctx.rotate(Math.PI / 2);
-                        if (char === "〜") {
-                           ctx.scale(-1, 1);
-                        }
+                        if (char === "〜") ctx.scale(-1, 1);
                         ctx.strokeText(char, 0, 0);
                         ctx.fillText(char, 0, 0);
                         ctx.restore();
                     } else if (CHARS_TOP_RIGHT.includes(char)) {
                         const offsetX = fontSize * 0.10;
                         const offsetY = fontSize * 0.10;
-                        ctx.strokeText(char, charX + offsetX, charY - offsetY);
-                        ctx.fillText(char, charX + offsetX, charY - offsetY);
+                        ctx.strokeText(char, offsetX, charY - offsetY);
+                        ctx.fillText(char, offsetX, charY - offsetY);
                     } else {
-                        ctx.strokeText(char, charX, charY);
-                        ctx.fillText(char, charX, charY);
+                        ctx.strokeText(char, 0, charY);
+                        ctx.fillText(char, 0, charY);
                     }
+                    currentY += charHeight;
                 }
             } else {
-                if (text.includes(CHAR_WAVE_DASH)) {
-                    ctx.textAlign = 'left';
-                    const textWidth = ctx.measureText(text).width;
-                    let currentX = -textWidth / 2;
-                    for (let i = 0; i < text.length; i++) {
-                        const char = text[i];
-                        const charWidth = ctx.measureText(char).width;
-                        if (char === CHAR_WAVE_DASH) {
-                            ctx.save();
-                            ctx.translate(currentX + charWidth / 2, 0);
-                            ctx.scale(-1, 1);
-                            ctx.strokeText(char, -charWidth / 2, 0);
-                            ctx.fillText(char, -charWidth / 2, 0);
-                            ctx.restore();
-                        } else {
-                            ctx.strokeText(char, currentX, 0);
-                            ctx.fillText(char, currentX, 0);
-                        }
-                        currentX += charWidth;
+                ctx.textAlign = 'left';
+                const textWidth = ctx.measureText(text).width;
+                let currentX = -textWidth / 2;
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    const charWidth = ctx.measureText(char).width;
+                    if (char === "〜") {
+                        ctx.save();
+                        ctx.translate(currentX + charWidth / 2, 0);
+                        ctx.scale(-1, 1);
+                        ctx.strokeText(char, -charWidth / 2, 0);
+                        ctx.fillText(char, -charWidth / 2, 0);
+                        ctx.restore();
+                    } else {
+                        ctx.strokeText(char, currentX, 0);
+                        ctx.fillText(char, currentX, 0);
                     }
-                } else {
-                    ctx.strokeText(text, 0, 0);
-                    ctx.fillText(text, 0, 0);
+                    currentX += charWidth;
                 }
             }
             ctx.restore();
