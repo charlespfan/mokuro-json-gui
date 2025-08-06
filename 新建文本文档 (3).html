@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終修正版)</title>
+    <title>JSON 標註互動式編輯工具 (批次修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,34 +68,39 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (最終修正版)</h1>
-            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (批次修正版)</h1>
+            <p class="mt-2 text-lg text-gray-400">支援批次匯入、編輯與儲存，大幅提升效率。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
             <!-- 控制面板 -->
             <div class="md:col-span-1">
                 <div class="card space-y-6">
-                    <!-- 檔案選擇 -->
+                    <!-- 批次處理 -->
                     <div>
-                        <h3 class="text-lg font-semibold mb-4">1. 載入檔案</h3>
+                        <h3 class="text-lg font-semibold mb-4">批次處理</h3>
                         <div class="space-y-4">
                             <div>
-                                <label for="imageInput" class="btn btn-primary w-full">選擇圖片檔案</label>
-                                <input type="file" id="imageInput" class="hidden" accept="image/*">
-                                <p id="imageStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇圖片</p>
+                                <label for="imageFolderInput" class="btn btn-primary w-full">選擇圖片資料夾</label>
+                                <input type="file" id="imageFolderInput" class="hidden" webkitdirectory directory multiple>
+                                <p id="imageFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
                             </div>
                             <div>
-                                <label for="jsonInput" class="btn btn-primary w-full">選擇 JSON 檔案</label>
-                                <input type="file" id="jsonInput" class="hidden" accept=".json,application/json">
-                                <p id="jsonStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇 JSON</p>
+                                <label for="jsonFolderInput" class="btn btn-primary w-full">選擇 JSON 資料夾</label>
+                                <input type="file" id="jsonFolderInput" class="hidden" webkitdirectory directory multiple>
+                                <p id="jsonFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
                             </div>
                         </div>
+                        <div id="batch-nav" class="mt-4 hidden items-center justify-between">
+                            <button id="prevFileBtn" class="btn btn-secondary">上一張</button>
+                            <span id="fileCounter" class="font-semibold text-lg"></span>
+                            <button id="nextFileBtn" class="btn btn-secondary">下一張</button>
+                        </div>
                     </div>
-                    
+
                     <!-- 編輯控制 -->
                     <div class="border-t border-gray-600 pt-6">
-                        <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
+                        <h3 class="text-lg font-semibold mb-4">編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
                             <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
@@ -125,8 +130,8 @@
 
                     <!-- 匯出 -->
                     <div class="border-t border-gray-600 pt-6">
-                         <h3 class="text-lg font-semibold mb-4">3. 儲存結果</h3>
-                        <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出修改後的 JSON</button>
+                         <h3 class="text-lg font-semibold mb-4">儲存結果</h3>
+                        <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出當前 JSON</button>
                     </div>
                 </div>
             </div>
@@ -142,12 +147,16 @@
 
     <script>
         // DOM 元素
-        const imageInput = document.getElementById('imageInput');
-        const jsonInput = document.getElementById('jsonInput');
+        const imageFolderInput = document.getElementById('imageFolderInput');
+        const jsonFolderInput = document.getElementById('jsonFolderInput');
         const mainCanvas = document.getElementById('mainCanvas');
         const ctx = mainCanvas.getContext('2d');
-        const imageStatus = document.getElementById('imageStatus');
-        const jsonStatus = document.getElementById('jsonStatus');
+        const imageFolderStatus = document.getElementById('imageFolderStatus');
+        const jsonFolderStatus = document.getElementById('jsonFolderStatus');
+        const batchNav = document.getElementById('batch-nav');
+        const prevFileBtn = document.getElementById('prevFileBtn');
+        const nextFileBtn = document.getElementById('nextFileBtn');
+        const fileCounter = document.getElementById('fileCounter');
         const showBlocksCheckbox = document.getElementById('showBlocks');
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
@@ -163,19 +172,24 @@
         const exportBtn = document.getElementById('exportBtn');
 
         // 應用程式狀態
+        let imageFiles = null;
+        let jsonFiles = null;
+        let matchedFiles = [];
+        let currentFileIndex = -1;
+
         let originalImage = null;
         let jsonData = null;
         let originalJsonFilename = 'annotations.json';
         let isDrawingMode = false;
-        let selectedLines = []; // 用於多選
-        let activeTarget = null; // 用於單選變形 { blockIndex, lineIndex }
+        let selectedLines = []; 
+        let activeTarget = null;
         
         let isDraggingRect = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
         
         let activeTransform = {
-            action: null, // 'move', 'rotate', 'scale', 'move-edge'
+            action: null,
             handleIndex: -1,
             startPos: {x: 0, y: 0},
             originalPoints: null,
@@ -185,11 +199,14 @@
         const HANDLE_RADIUS = 8;
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
         const CHARS_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ、。";
-        const CHAR_WAVE_DASH = "〜"; // *** 核心修正：加回此行 ***
+        const CHAR_WAVE_DASH = "〜";
 
         // --- 事件監聽器 ---
-        imageInput.addEventListener('change', loadImage);
-        jsonInput.addEventListener('change', loadJson);
+        imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
+        jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
+        prevFileBtn.addEventListener('click', () => navigateFiles(-1));
+        nextFileBtn.addEventListener('click', () => navigateFiles(1));
+
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
@@ -207,49 +224,105 @@
         mainCanvas.addEventListener('mouseout', handleMouseOut);
 
 
-        // --- 檔案載入 ---
-        function loadImage(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                originalImage = new Image();
-                originalImage.onload = () => {
-                    imageStatus.textContent = `已載入: ${file.name}`;
-                    imageStatus.classList.add('text-green-400');
-                    checkFilesAndInit();
-                };
-                originalImage.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+        // --- 批次處理 ---
+        function handleFolderSelect(e, type) {
+            const files = e.target.files;
+            if (type === 'image') {
+                imageFiles = Array.from(files);
+                imageFolderStatus.textContent = `已選擇 ${files.length} 個圖片檔案`;
+                imageFolderStatus.classList.add('text-green-400');
+            } else {
+                jsonFiles = Array.from(files);
+                jsonFolderStatus.textContent = `已選擇 ${files.length} 個 JSON 檔案`;
+                jsonFolderStatus.classList.add('text-green-400');
+            }
+            matchFiles();
         }
 
-        function loadJson(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            originalJsonFilename = file.name;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    jsonData = JSON.parse(event.target.result);
-                    jsonStatus.textContent = `已載入: ${file.name}`;
-                    jsonStatus.classList.add('text-green-400');
-                    checkFilesAndInit();
-                } catch (err) {
-                    jsonStatus.textContent = `JSON 解析錯誤: ${err.message}`;
-                    jsonStatus.classList.add('text-red-400');
+        function matchFiles() {
+            if (!imageFiles || !jsonFiles) return;
+
+            const jsonMap = new Map();
+            jsonFiles.forEach(file => {
+                const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                jsonMap.set(baseName, file);
+            });
+
+            matchedFiles = [];
+            imageFiles.forEach(imgFile => {
+                const baseName = imgFile.name.substring(0, imgFile.name.lastIndexOf('.'));
+                if (jsonMap.has(baseName)) {
+                    matchedFiles.push({ image: imgFile, json: jsonMap.get(baseName) });
                 }
-            };
-            reader.readAsText(file);
-        }
+            });
+            
+            matchedFiles.sort((a, b) => a.image.name.localeCompare(b.image.name));
 
-        function checkFilesAndInit() {
-            if (originalImage && jsonData) {
-                editPanel.classList.remove('opacity-50', 'pointer-events-none');
-                exportBtn.classList.remove('opacity-50', 'pointer-events-none');
-                drawVisualizations();
+            if (matchedFiles.length > 0) {
+                currentFileIndex = 0;
+                loadFile(currentFileIndex);
+                batchNav.classList.remove('hidden');
+                batchNav.classList.add('flex');
+            } else {
+                alert("未找到任何匹配的圖片與 JSON 檔案！請確保檔名（不含副檔名）一致。");
             }
         }
+
+        function navigateFiles(direction) {
+            if (matchedFiles.length === 0) return;
+            const newIndex = currentFileIndex + direction;
+            if (newIndex >= 0 && newIndex < matchedFiles.length) {
+                currentFileIndex = newIndex;
+                loadFile(currentFileIndex);
+            }
+        }
+
+        async function loadFile(index) {
+            const { image, json } = matchedFiles[index];
+            
+            const imagePromise = new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    originalImage = new Image();
+                    originalImage.onload = () => resolve();
+                    originalImage.onerror = reject;
+                    originalImage.src = event.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(image);
+            });
+
+            const jsonPromise = new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        jsonData = JSON.parse(event.target.result);
+                        originalJsonFilename = json.name;
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsText(json);
+            });
+
+            try {
+                await Promise.all([imagePromise, jsonPromise]);
+                
+                editPanel.classList.remove('opacity-50', 'pointer-events-none');
+                exportBtn.classList.remove('opacity-50', 'pointer-events-none');
+                fileCounter.textContent = `${index + 1} / ${matchedFiles.length}`;
+                prevFileBtn.disabled = index === 0;
+                nextFileBtn.disabled = index === matchedFiles.length - 1;
+
+                resetSelectionAndRedraw();
+            } catch (error) {
+                console.error("Error loading file pair:", error);
+                alert(`載入檔案 ${image.name} 或 ${json.name} 時出錯。`);
+            }
+        }
+
 
         // --- 編輯模式切換 ---
         function toggleDrawMode() {
@@ -688,7 +761,6 @@
                         ctx.save();
                         ctx.translate(charX, charY);
                         ctx.rotate(Math.PI / 2);
-                        // Special flip for WAVE DASH
                         if (char === "〜") {
                            ctx.scale(-1, 1);
                         }
