@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (屬性修正版)</title>
+    <title>JSON 標註互動式編輯工具 (連續操作修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -61,7 +61,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (屬性修正版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (連續操作修正版)</h1>
             <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字與屬性，一站式完成標註修正。</p>
         </header>
 
@@ -331,7 +331,7 @@
         function addNewLine(text, polygon) {
             const newBlock = {
                 box: [],
-                vertical: false, // 新增的矩形框預設為橫排
+                vertical: false,
                 font_size: 20,
                 lines_coords: [polygon],
                 lines: [text]
@@ -368,7 +368,7 @@
             const newText = prompt("請輸入新的文字內容:", currentText);
             if (newText !== null && newText !== currentText) {
                 jsonData.blocks[blockIndex].lines[lineIndex] = newText;
-                drawVisualizations();
+                resetSelectionAndRedraw();
             }
         }
         
@@ -380,7 +380,7 @@
             const newStatus = block.vertical ? "橫排" : "豎排";
             if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
                 block.vertical = !block.vertical;
-                drawVisualizations();
+                resetSelectionAndRedraw();
             }
         }
 
@@ -391,18 +391,12 @@
             if (blockToSplit.lines.length < 2) return;
 
             const newBlocks = blockToSplit.lines.map((lineText, lineIndex) => {
-                const newBlock = {
-                    ...blockToSplit,
-                    lines: [lineText],
-                    lines_coords: [blockToSplit.lines_coords[lineIndex]],
-                    box: []
-                };
+                const newBlock = { ...blockToSplit, lines: [lineText], lines_coords: [blockToSplit.lines_coords[lineIndex]], box: [] };
                 recalculateBoxForBlock(newBlock);
                 return newBlock;
             });
-            
             jsonData.blocks.splice(blockIndex, 1, ...newBlocks);
-            setMode(false, false);
+            resetSelectionAndRedraw();
         }
 
         function mergeSelectedLines() {
@@ -412,35 +406,40 @@
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
                 block: jsonData.blocks[sel.blockIndex]
             }));
-            
             const newBlock = {
                 lines_coords: linesToMerge.map(l => l.coord),
                 lines: linesToMerge.map(l => l.text),
                 font_size: linesToMerge.reduce((sum, l) => sum + (l.block.font_size || 0), 0) / linesToMerge.length,
-                vertical: linesToMerge[0].block.vertical, // 以第一個選中的為準
+                vertical: linesToMerge[0].block.vertical,
                 box: []
             };
-            
             deleteSelectedLines(false);
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
-            setMode(false, false);
+            resetSelectionAndRedraw();
         }
 
-        function deleteSelectedLines(resetMode = true) {
+        function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
             selectedLines.sort((a, b) => b.blockIndex - a.blockIndex || b.lineIndex - a.lineIndex);
-            
             selectedLines.forEach(sel => {
                 const block = jsonData.blocks[sel.blockIndex];
                 block.lines_coords.splice(sel.lineIndex, 1);
                 block.lines.splice(sel.lineIndex, 1);
                 recalculateBoxForBlock(block);
             });
-            
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
-            if (resetMode) setMode(false, false);
+            if (redraw) resetSelectionAndRedraw();
         }
+        
+        // *** 核心修正 ***
+        // 建立一個統一的函式來重設選取狀態並重繪，避免退出模式
+        function resetSelectionAndRedraw() {
+            selectedLines = [];
+            updateActionButtons();
+            drawVisualizations();
+        }
+
 
         function exportJson() {
             if (!jsonData) { alert("沒有可匯出的資料！"); return; }
@@ -495,11 +494,8 @@
                     const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSize}px sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-                    
-                    // 新增：顯示橫豎排屬性
                     const orientation = block.vertical ? '[豎]' : '[橫]';
                     const textContent = `${orientation}[${blockIndex}] ${block.lines.join(' ')}`;
-                    
                     ctx.strokeText(textContent, x1, y1 - 5);
                     ctx.fillText(textContent, x1, y1 - 5);
                 }
