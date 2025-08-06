@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (專業排版版)</title>
+    <title>JSON 標註互動式編輯工具 (自動字號版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (專業排版版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (自動字號版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -94,6 +94,7 @@
                         <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
+                            <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
                             <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
@@ -148,6 +149,7 @@
         const showTextCheckbox = document.getElementById('showText');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
+        const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -183,6 +185,7 @@
         jsonInput.addEventListener('change', loadJson);
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
+        autoFontSizeBtn.addEventListener('click', autoSetFontSize);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
@@ -467,6 +470,31 @@
             }
         }
 
+        function autoSetFontSize() {
+            const targetBlockIndices = new Set();
+            if (selectedLines.length === 0) {
+                jsonData.blocks.forEach((_, index) => targetBlockIndices.add(index));
+            } else {
+                selectedLines.forEach(sel => targetBlockIndices.add(sel.blockIndex));
+            }
+
+            targetBlockIndices.forEach(blockIndex => {
+                const block = jsonData.blocks[blockIndex];
+                if (!block.lines || block.lines.length === 0) return;
+
+                let minFontSize = Infinity;
+                block.lines.forEach((lineText, lineIndex) => {
+                    const polygon = block.lines_coords[lineIndex];
+                    const size = calculateAutoFontSize(lineText, polygon, block.vertical);
+                    if (size < minFontSize) {
+                        minFontSize = size;
+                    }
+                });
+                block.font_size = parseFloat(minFontSize.toFixed(2));
+            });
+            resetSelectionAndRedraw();
+        }
+
         function splitSelectedBlock() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -552,7 +580,6 @@
                     ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-                    // 繪製索引和字號
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSizeLabel}px sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
@@ -619,9 +646,9 @@
             ctx.translate(center.x, center.y);
             ctx.rotate(angle);
 
-            ctx.font = `${fontSize}px sans-serif`;
+            ctx.font = `${fontSize}px sans-serif`; // 使用正常字重
             ctx.fillStyle = 'black';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // 白色邊框
             ctx.lineWidth = 2;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -648,6 +675,28 @@
                 ctx.fillText(text, 0, 0);
             }
             ctx.restore();
+        }
+        
+        function calculateAutoFontSize(text, polygon, isVertical) {
+            const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
+            const width = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+            const height = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+            
+            if (isVertical) {
+                if (!text || text.length === 0) return 20;
+                const sizeFromHeight = height / text.length;
+                const sizeFromWidth = width;
+                return Math.min(sizeFromHeight, sizeFromWidth) * 0.9; // 0.9 for padding
+            } else {
+                let fontSize = height * 0.9;
+                ctx.font = `${fontSize}px sans-serif`;
+                let textWidth = ctx.measureText(text).width;
+                // 如果文字超出寬度，則按比例縮小字號
+                if (textWidth > width) {
+                    fontSize = fontSize * (width / textWidth);
+                }
+                return fontSize * 0.9;
+            }
         }
 
         // --- 幾何計算輔助函式 ---
