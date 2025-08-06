@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (專業排版最終版)</title>
+    <title>JSON 標註互動式編輯工具 (精细化排版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (專業排版最終版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精细化排版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -208,7 +208,15 @@
         };
         const HANDLE_RADIUS = 8;
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
-        const CHARS_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ、。､";
+        
+        // --- *** 修改開始：精细化排版 *** ---
+        // 1. 将需要特殊处理的字符分成两组，以便应用不同的偏移效果
+        // 2. 小写假名组：应用较小的偏移，使其稍微靠向右上角
+        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
+        // 3. 标点符号组：应用较大的偏移，使其更明确地位于右上角
+        const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
+        // --- *** 修改结束 *** ---
+
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -868,11 +876,20 @@
                         ctx.strokeText(char, 0, 0);
                         ctx.fillText(char, 0, 0);
                         ctx.restore();
-                    } else if (CHARS_TOP_RIGHT.includes(char)) {
-                        const offsetX = fontSize * 0.10;
-                        const offsetY = fontSize * 0.10;
+                    // --- *** 修改開始：精细化排版 *** ---
+                    // 4. 为标点符号应用一个较大的偏移，使其更靠右上角
+                    } else if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
+                        const offsetX = fontSize * 0.4; // 较大的 X 轴偏移
+                        const offsetY = fontSize * 0.4; // 较大的 Y 轴偏移
                         ctx.strokeText(char, offsetX, charY - offsetY);
                         ctx.fillText(char, offsetX, charY - offsetY);
+                    // 5. 为小写假名应用一个较小的偏移
+                    } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
+                        const offsetX = fontSize * 0.15; // 较小的 X 轴偏移
+                        const offsetY = fontSize * 0.15; // 较小的 Y 轴偏移
+                        ctx.strokeText(char, offsetX, charY - offsetY);
+                        ctx.fillText(char, offsetX, charY - offsetY);
+                    // --- *** 修改结束 *** ---
                     } else {
                         ctx.strokeText(char, 0, charY);
                         ctx.fillText(char, 0, charY);
