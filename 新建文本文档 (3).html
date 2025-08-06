@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (拖曳繪製版)</title>
+    <title>JSON 標註互動式編輯工具 (屬性修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -39,6 +39,8 @@
         .btn-warning:hover { background-color: #d97706; }
         .btn-info { background-color: #0ea5e9; color: white; }
         .btn-info:hover { background-color: #0284c7; }
+        .btn-purple { background-color: #8b5cf6; color: white; }
+        .btn-purple:hover { background-color: #7c3aed; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
         .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
@@ -59,8 +61,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (拖曳繪製版)</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (屬性修正版)</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字與屬性，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -96,6 +98,7 @@
                                 <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分 Block</button>
                                 <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
                             </div>
+                             <button id="editPropBtn" class="btn btn-purple w-full" disabled>修改屬性 (橫/豎)</button>
                         </div>
                     </div>
 
@@ -105,7 +108,7 @@
                         <div class="space-y-3">
                             <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
                             <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容 (白色)</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字與屬性 (白色)</label>
                         </div>
                     </div>
 
@@ -144,6 +147,7 @@
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
         const editTextBtn = document.getElementById('editTextBtn');
+        const editPropBtn = document.getElementById('editPropBtn');
         const exportBtn = document.getElementById('exportBtn');
 
         // 應用程式狀態
@@ -153,7 +157,7 @@
         let isDrawingMode = false;
         let selectedLines = [];
         
-        // 新增：用於拖曳繪製的狀態變數
+        // 用於拖曳繪製的狀態變數
         let isDragging = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -168,9 +172,9 @@
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
         editTextBtn.addEventListener('click', editSelectedLineText);
+        editPropBtn.addEventListener('click', editSelectedBlockProps);
         exportBtn.addEventListener('click', exportJson);
         
-        // 修改：分離點擊和拖曳事件
         mainCanvas.addEventListener('click', handleCanvasClick);
         mainCanvas.addEventListener('mousedown', handleMouseDown);
         mainCanvas.addEventListener('mousemove', handleMouseMove);
@@ -280,13 +284,12 @@
         function handleMouseUp(e) {
             if (isDrawingMode && isDragging) {
                 isDragging = false;
-                // 確保寬高為正值
                 const x1 = Math.min(startDragPoint.x, startDragPoint.x + currentRect.w);
                 const y1 = Math.min(startDragPoint.y, startDragPoint.y + currentRect.h);
                 const x2 = Math.max(startDragPoint.x, startDragPoint.x + currentRect.w);
                 const y2 = Math.max(startDragPoint.y, startDragPoint.y + currentRect.h);
 
-                if (x2 - x1 > 5 && y2 - y1 > 5) { // 避免誤觸
+                if (x2 - x1 > 5 && y2 - y1 > 5) {
                     const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
                     if (text !== null) {
                         const newPolygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
@@ -328,7 +331,7 @@
         function addNewLine(text, polygon) {
             const newBlock = {
                 box: [],
-                vertical: false,
+                vertical: false, // 新增的矩形框預設為橫排
                 font_size: 20,
                 lines_coords: [polygon],
                 lines: [text]
@@ -355,6 +358,7 @@
             deleteBtn.disabled = count < 1;
             splitBtn.disabled = count !== 1 || (count === 1 && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
             editTextBtn.disabled = count !== 1;
+            editPropBtn.disabled = count !== 1;
         }
         
         function editSelectedLineText() {
@@ -364,6 +368,18 @@
             const newText = prompt("請輸入新的文字內容:", currentText);
             if (newText !== null && newText !== currentText) {
                 jsonData.blocks[blockIndex].lines[lineIndex] = newText;
+                drawVisualizations();
+            }
+        }
+        
+        function editSelectedBlockProps() {
+            if (selectedLines.length !== 1) return;
+            const { blockIndex } = selectedLines[0];
+            const block = jsonData.blocks[blockIndex];
+            const currentStatus = block.vertical ? "豎排" : "橫排";
+            const newStatus = block.vertical ? "橫排" : "豎排";
+            if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
+                block.vertical = !block.vertical;
                 drawVisualizations();
             }
         }
@@ -401,7 +417,7 @@
                 lines_coords: linesToMerge.map(l => l.coord),
                 lines: linesToMerge.map(l => l.text),
                 font_size: linesToMerge.reduce((sum, l) => sum + (l.block.font_size || 0), 0) / linesToMerge.length,
-                vertical: linesToMerge[0].block.vertical,
+                vertical: linesToMerge[0].block.vertical, // 以第一個選中的為準
                 box: []
             };
             
@@ -479,16 +495,19 @@
                     const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSize}px sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-                    const textContent = `[${blockIndex}] ${block.lines.join(' ')}`;
+                    
+                    // 新增：顯示橫豎排屬性
+                    const orientation = block.vertical ? '[豎]' : '[橫]';
+                    const textContent = `${orientation}[${blockIndex}] ${block.lines.join(' ')}`;
+                    
                     ctx.strokeText(textContent, x1, y1 - 5);
                     ctx.fillText(textContent, x1, y1 - 5);
                 }
             });
             
-            // 新增：繪製正在拖曳的矩形
             if (isDrawingMode && isDragging) {
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.3)'; // 半透明黃色
-                ctx.strokeStyle = '#f59e0b'; // 黃色
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
+                ctx.strokeStyle = '#f59e0b';
                 ctx.lineWidth = 2;
                 ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
                 ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
