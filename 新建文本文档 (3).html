@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (所見即所得版)</title>
+    <title>JSON 標註互動式編輯工具 (字號控制版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,8 +64,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (所見即所得版)</h1>
-            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。文字即時渲染，操作更直觀。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (字號控制版)</h1>
+            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -101,7 +101,10 @@
                                 <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分 Block</button>
                                 <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
                             </div>
-                             <button id="editPropBtn" class="btn btn-purple w-full" disabled>修改屬性 (橫/豎)</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="editPropBtn" class="btn btn-purple w-full" disabled>修改屬性</button>
+                                <button id="editFontSizeBtn" class="btn btn-purple w-full" disabled>修改字號</button>
+                            </div>
                         </div>
                     </div>
 
@@ -111,7 +114,7 @@
                         <div class="space-y-3">
                             <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
                             <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃/紅)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容</button>
                         </div>
                     </div>
 
@@ -150,6 +153,7 @@
         const splitBtn = document.getElementById('splitBtn');
         const editTextBtn = document.getElementById('editTextBtn');
         const editPropBtn = document.getElementById('editPropBtn');
+        const editFontSizeBtn = document.getElementById('editFontSizeBtn');
         const exportBtn = document.getElementById('exportBtn');
 
         // 應用程式狀態
@@ -183,6 +187,7 @@
         splitBtn.addEventListener('click', splitSelectedBlock);
         editTextBtn.addEventListener('click', editSelectedLineText);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
+        editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
         exportBtn.addEventListener('click', exportJson);
         
         mainCanvas.addEventListener('mousedown', handleMouseDown);
@@ -420,6 +425,7 @@
             splitBtn.disabled = !singleSelected || (singleSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
             editTextBtn.disabled = !singleSelected;
             editPropBtn.disabled = !singleSelected;
+            editFontSizeBtn.disabled = !singleSelected;
         }
         
         function editSelectedLineText() {
@@ -441,6 +447,22 @@
             if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
                 block.vertical = !block.vertical;
                 resetSelectionAndRedraw();
+            }
+        }
+
+        function editSelectedBlockFontSize() {
+            if (selectedLines.length !== 1) return;
+            const { blockIndex } = selectedLines[0];
+            const block = jsonData.blocks[blockIndex];
+            const newSize = prompt("請輸入新的 Font Size:", block.font_size);
+            if (newSize !== null) {
+                const parsedSize = parseFloat(newSize);
+                if (!isNaN(parsedSize) && parsedSize > 0) {
+                    block.font_size = parsedSize;
+                    resetSelectionAndRedraw();
+                } else {
+                    alert("請輸入有效的數字！");
+                }
             }
         }
 
@@ -529,12 +551,13 @@
                     ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-                    // 繪製索引
-                    const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
-                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    // 繪製索引和字號
+                    const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
+                    ctx.font = `bold ${fontSizeLabel}px sans-serif`;
                     ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-                    ctx.strokeText(`[${blockIndex}]`, x1, y1 - 5);
-                    ctx.fillText(`[${blockIndex}]`, x1, y1 - 5);
+                    const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
+                    ctx.strokeText(labelContent, x1, y1 - 5);
+                    ctx.fillText(labelContent, x1, y1 - 5);
                 }
 
                 if (block.lines_coords) {
@@ -553,7 +576,7 @@
                         }
                         
                         if (showText) {
-                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical);
+                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size);
                         }
 
                         if (isActiveTarget) {
@@ -586,10 +609,8 @@
             }
         }
         
-        function drawTextInPolygon(text, polygon, isVertical) {
+        function drawTextInPolygon(text, polygon, isVertical, fontSize = 20) {
             const p0 = polygon[0], p1 = polygon[1], p3 = polygon[3];
-            const width = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-            const height = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
             const center = getPolygonCenter(polygon);
 
@@ -597,12 +618,14 @@
             ctx.translate(center.x, center.y);
             ctx.rotate(angle);
 
-            let fontSize;
+            ctx.font = `${fontSize}px sans-serif`;
+            ctx.fillStyle = 'black';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1.5;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
             if (isVertical) {
-                fontSize = Math.min(height / text.length, width) * 0.8;
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
                 const totalTextHeight = text.length * fontSize;
                 let startY = -totalTextHeight / 2 + fontSize / 2;
                 for (let i = 0; i < text.length; i++) {
@@ -610,10 +633,6 @@
                     ctx.fillText(text[i], 0, startY + i * fontSize);
                 }
             } else {
-                fontSize = height * 0.8;
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
                 ctx.strokeText(text, 0, 0);
                 ctx.fillText(text, 0, 0);
             }
