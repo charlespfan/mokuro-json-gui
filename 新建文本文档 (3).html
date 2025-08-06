@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (方向約束版)</title>
+    <title>JSON 標註互動式編輯工具 (引號修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (方向約束版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (引號修正版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -178,7 +178,8 @@
             startAngle: 0
         };
         const HANDLE_RADIUS = 8;
-        const CHARS_TO_ROTATE = "…—~()[]{}<>（）【】《》ー";
+        // *** 核心修正：加入了完整的標點符號列表 ***
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～｛｝｢｣〝〟";
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
@@ -517,7 +518,6 @@
                 block: jsonData.blocks[sel.blockIndex]
             }));
 
-            // *** 核心修正：使用中位數計算字號 ***
             const fontSizes = linesToMerge.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) {
