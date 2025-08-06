@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (變形版)</title>
+    <title>JSON 標註互動式編輯工具 (自由變形版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -62,7 +62,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (變形版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (自由變形版)</h1>
             <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字、屬性與形狀，一站式完成標註修正。</p>
         </header>
 
@@ -332,7 +332,8 @@
                     const angleDiff = currentAngle - activeTransform.startAngle;
                     newPoints = rotatePolygon(newPoints, activeTransform.center, angleDiff);
                 } else if (activeTransform.action === 'scale') {
-                    newPoints = scalePolygon(newPoints, activeTransform.center, activeTransform.handleIndex, pos);
+                    // *** 核心修正：直接移動角點 ***
+                    newPoints[activeTransform.handleIndex] = [pos.x, pos.y];
                 }
                 
                 jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPoints;
@@ -605,8 +606,8 @@
             const center = getPolygonCenter(line);
             const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
             const rotateHandle = {
-                x: topCenter.x + Math.cos(angle) * 20,
-                y: topCenter.y + Math.sin(angle) * 20,
+                x: topCenter.x + Math.cos(angle) * 25,
+                y: topCenter.y + Math.sin(angle) * 25,
                 type: 'rotate'
             };
             handles.push(rotateHandle);
@@ -620,19 +621,6 @@
                 const newX = x * Math.cos(angle) - y * Math.sin(angle);
                 const newY = x * Math.sin(angle) + y * Math.cos(angle);
                 return [newX + center.x, newY + center.y];
-            });
-        }
-
-        function scalePolygon(points, center, handleIndex, newPos) {
-            const originalHandle = activeTransform.originalPoints[handleIndex];
-            const originalDist = Math.hypot(originalHandle[0] - center.x, originalHandle[1] - center.y);
-            const newDist = Math.hypot(newPos.x - center.x, newPos.y - center.y);
-            if (originalDist < 1) return points;
-            const scale = newDist / originalDist;
-            return activeTransform.originalPoints.map(p => {
-                const x = p[0] - center.x;
-                const y = p[1] - center.y;
-                return [x * scale + center.x, y * scale + center.y];
             });
         }
         
