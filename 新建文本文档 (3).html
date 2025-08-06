@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (自動字號版)</title>
+    <title>JSON 標註互動式編輯工具 (精準字號版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -64,7 +64,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (自動字號版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精準字號版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -646,9 +646,9 @@
             ctx.translate(center.x, center.y);
             ctx.rotate(angle);
 
-            ctx.font = `${fontSize}px sans-serif`; // 使用正常字重
+            ctx.font = `${fontSize}px sans-serif`;
             ctx.fillStyle = 'black';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // 白色邊框
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.lineWidth = 2;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -679,23 +679,28 @@
         
         function calculateAutoFontSize(text, polygon, isVertical) {
             const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
-            const width = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-            const height = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+            const width1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+            const width2 = Math.hypot(p2[0] - p3[0], p2[1] - p3[1]);
+            const avgWidth = (width1 + width2) / 2;
+
+            const height1 = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+            const height2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+            const avgHeight = (height1 + height2) / 2;
             
+            if (!text || text.length === 0) return 20;
+
             if (isVertical) {
-                if (!text || text.length === 0) return 20;
-                const sizeFromHeight = height / text.length;
-                const sizeFromWidth = width;
-                return Math.min(sizeFromHeight, sizeFromWidth) * 0.9; // 0.9 for padding
+                const sizeLimitedByWidth = avgWidth;
+                const sizeLimitedByHeight = avgHeight / text.length;
+                return Math.min(sizeLimitedByWidth, sizeLimitedByHeight) * 0.98;
             } else {
-                let fontSize = height * 0.9;
+                let fontSize = avgHeight;
                 ctx.font = `${fontSize}px sans-serif`;
-                let textWidth = ctx.measureText(text).width;
-                // 如果文字超出寬度，則按比例縮小字號
-                if (textWidth > width) {
-                    fontSize = fontSize * (width / textWidth);
+                const measuredWidth = ctx.measureText(text).width;
+                if (measuredWidth > avgWidth && measuredWidth > 0) {
+                    fontSize = fontSize * (avgWidth / measuredWidth);
                 }
-                return fontSize * 0.9;
+                return fontSize * 0.98;
             }
         }
 
