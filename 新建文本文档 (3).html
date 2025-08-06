@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具</title>
+    <title>JSON 標註互動式編輯工具 (最終版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif, 'Microsoft JhengHei', '微軟正黑體';
-            background-color: #111827; /* 深灰色背景 */
-            color: #e5e7eb; /* 淺灰色文字 */
+            background-color: #111827;
+            color: #e5e7eb;
         }
         .card {
-            background-color: #1f2937; /* 卡片背景色 */
-            border: 1px solid #374151; /* 邊框顏色 */
+            background-color: #1f2937;
+            border: 1px solid #374151;
             border-radius: 0.75rem;
             padding: 1.5rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -35,6 +35,8 @@
         .btn-secondary:hover { background-color: #374151; }
         .btn-success { background-color: #22c55e; color: white; }
         .btn-success:hover { background-color: #16a34a; }
+        .btn-warning { background-color: #f59e0b; color: white; }
+        .btn-warning:hover { background-color: #d97706; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
         .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
@@ -46,7 +48,7 @@
             height: auto;
             background-color: #374151;
         }
-        .edit-mode canvas { cursor: pointer; }
+        .edit-mode canvas, .draw-mode canvas { cursor: pointer; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
@@ -54,8 +56,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、匯出，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (最終版)</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、刪除、新增、匯出，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -82,9 +84,13 @@
                     <!-- 編輯控制 -->
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
-                        <div class="space-y-4">
-                            <button id="editModeBtn" class="btn btn-secondary w-full">進入編輯模式</button>
-                            <button id="mergeBtn" class="btn btn-success w-full" disabled>合併選取 (0)</button>
+                        <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
+                            <button id="selectModeBtn" class="btn btn-secondary w-full">進入/退出選取模式</button>
+                            <button id="drawModeBtn" class="btn btn-secondary w-full">新增 Line 框</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
+                                <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
+                            </div>
                         </div>
                     </div>
 
@@ -101,7 +107,7 @@
                     <!-- 匯出 -->
                     <div class="border-t border-gray-600 pt-6">
                          <h3 class="text-lg font-semibold mb-4">3. 儲存結果</h3>
-                        <button id="exportBtn" class="btn btn-danger w-full">匯出修改後的 JSON</button>
+                        <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出修改後的 JSON</button>
                     </div>
                 </div>
             </div>
@@ -116,7 +122,7 @@
     </div>
 
     <script>
-        // DOM 元素獲取
+        // DOM 元素
         const imageInput = document.getElementById('imageInput');
         const jsonInput = document.getElementById('jsonInput');
         const mainCanvas = document.getElementById('mainCanvas');
@@ -126,106 +132,122 @@
         const showBlocksCheckbox = document.getElementById('showBlocks');
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
-        const editModeBtn = document.getElementById('editModeBtn');
+        const editPanel = document.getElementById('editPanel');
+        const selectModeBtn = document.getElementById('selectModeBtn');
+        const drawModeBtn = document.getElementById('drawModeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
         const exportBtn = document.getElementById('exportBtn');
 
-        // 應用程式狀態變數
+        // 應用程式狀態
         let originalImage = null;
         let jsonData = null;
-        let isEditMode = false;
-        let selectedLines = []; // 儲存格式: { blockIndex, lineIndex, originalBlockIndex, originalLineIndex }
+        let isSelectMode = false;
+        let isDrawingMode = false;
+        let selectedLines = [];
+        let newPolygonPoints = [];
 
-        // --- 事件監聽 ---
-
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    originalImage = new Image();
-                    originalImage.onload = () => {
-                        imageStatus.textContent = `已載入: ${file.name}`;
-                        imageStatus.classList.add('text-green-400');
-                        handleFiles();
-                    };
-                    originalImage.src = event.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        jsonInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        jsonData = JSON.parse(event.target.result);
-                        jsonStatus.textContent = `已載入: ${file.name}`;
-                        jsonStatus.classList.add('text-green-400');
-                        handleFiles();
-                    } catch (err) {
-                        jsonStatus.textContent = `JSON 解析錯誤: ${err.message}`;
-                        jsonStatus.classList.add('text-red-400');
-                    }
-                };
-                reader.readAsText(file);
-            }
-        });
-        
-        [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(checkbox => {
-            checkbox.addEventListener('change', handleFiles);
-        });
-
-        editModeBtn.addEventListener('click', toggleEditMode);
+        // --- 事件監聽器 ---
+        imageInput.addEventListener('change', loadImage);
+        jsonInput.addEventListener('change', loadJson);
+        [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
+        selectModeBtn.addEventListener('click', toggleSelectMode);
+        drawModeBtn.addEventListener('click', toggleDrawMode);
         mergeBtn.addEventListener('click', mergeSelectedLines);
+        deleteBtn.addEventListener('click', deleteSelectedLines);
         exportBtn.addEventListener('click', exportJson);
         mainCanvas.addEventListener('click', handleCanvasClick);
 
-        // --- 核心功能函式 ---
+        // --- 檔案載入 ---
+        function loadImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImage = new Image();
+                originalImage.onload = () => {
+                    imageStatus.textContent = `已載入: ${file.name}`;
+                    imageStatus.classList.add('text-green-400');
+                    checkFilesAndInit();
+                };
+                originalImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
 
-        function handleFiles() {
+        function loadJson(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    jsonData = JSON.parse(event.target.result);
+                    jsonStatus.textContent = `已載入: ${file.name}`;
+                    jsonStatus.classList.add('text-green-400');
+                    checkFilesAndInit();
+                } catch (err) {
+                    jsonStatus.textContent = `JSON 解析錯誤: ${err.message}`;
+                    jsonStatus.classList.add('text-red-400');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function checkFilesAndInit() {
             if (originalImage && jsonData) {
+                editPanel.classList.remove('opacity-50', 'pointer-events-none');
+                exportBtn.classList.remove('opacity-50', 'pointer-events-none');
                 drawVisualizations();
             }
         }
 
-        function toggleEditMode() {
-            isEditMode = !isEditMode;
-            if (isEditMode) {
-                editModeBtn.textContent = '退出編輯模式';
-                editModeBtn.classList.replace('btn-secondary', 'btn-danger');
-                mainCanvas.parentElement.parentElement.classList.add('edit-mode');
-            } else {
-                editModeBtn.textContent = '進入編輯模式';
-                editModeBtn.classList.replace('btn-danger', 'btn-secondary');
-                mainCanvas.parentElement.parentElement.classList.remove('edit-mode');
-                selectedLines = [];
-                updateMergeButton();
-                drawVisualizations();
-            }
+        // --- 編輯模式切換 ---
+        function setMode(select, draw) {
+            isSelectMode = select;
+            isDrawingMode = draw;
+
+            selectModeBtn.textContent = isSelectMode ? '退出選取模式' : '進入選取模式';
+            selectModeBtn.classList.toggle('btn-danger', isSelectMode);
+            selectModeBtn.classList.toggle('btn-secondary', !isSelectMode);
+            
+            drawModeBtn.textContent = isDrawingMode ? `正在繪製 (${newPolygonPoints.length}/4)` : '新增 Line 框';
+            drawModeBtn.classList.toggle('btn-warning', isDrawingMode);
+            drawModeBtn.classList.toggle('btn-secondary', !isDrawingMode);
+
+            mainCanvas.parentElement.parentElement.classList.toggle('select-mode', isSelectMode);
+            mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
+            
+            if (!isSelectMode) selectedLines = [];
+            if (!isDrawingMode) newPolygonPoints = [];
+            
+            updateActionButtons();
+            drawVisualizations();
         }
 
+        function toggleSelectMode() { setMode(!isSelectMode, false); }
+        function toggleDrawMode() { setMode(false, !isDrawingMode); }
+
+        // --- 畫布點擊處理 ---
         function handleCanvasClick(e) {
-            if (!isEditMode || !jsonData) return;
+            if (!isSelectMode && !isDrawingMode) return;
 
             const rect = mainCanvas.getBoundingClientRect();
             const scaleX = mainCanvas.width / rect.width;
             const scaleY = mainCanvas.height / rect.height;
-            const clickPoint = {
-                x: (e.clientX - rect.left) * scaleX,
-                y: (e.clientY - rect.top) * scaleY
-            };
+            const clickPoint = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
 
+            if (isSelectMode) handleSelection(clickPoint);
+            if (isDrawingMode) handleDrawing(clickPoint);
+        }
+        
+        function handleSelection(point) {
             let lineClicked = false;
             for (let i = 0; i < jsonData.blocks.length; i++) {
                 const block = jsonData.blocks[i];
                 if (!block.lines_coords) continue;
-
                 for (let j = 0; j < block.lines_coords.length; j++) {
                     const polygon = block.lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
-                    if (isPointInPolygon(clickPoint, polygon)) {
+                    if (isPointInPolygon(point, polygon)) {
                         toggleLineSelection(i, j);
                         lineClicked = true;
                         break;
@@ -236,95 +258,103 @@
             drawVisualizations();
         }
 
-        function toggleLineSelection(blockIndex, lineIndex) {
-            const findIndex = selectedLines.findIndex(
-                sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex
-            );
+        function handleDrawing(point) {
+            newPolygonPoints.push([point.x, point.y]);
+            drawModeBtn.textContent = `正在繪製 (${newPolygonPoints.length}/4)`;
+            if (newPolygonPoints.length === 4) {
+                addNewLine();
+                setMode(false, false); // 繪製完成後自動退出模式
+            }
+            drawVisualizations();
+        }
 
+        // --- 核心編輯邏輯 ---
+        function addNewLine() {
+            const newBlock = {
+                box: [],
+                vertical: false,
+                font_size: 20, // 預設字號
+                lines_coords: [newPolygonPoints],
+                lines: ["(新增)"] // 預設文字
+            };
+            
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            newPolygonPoints.forEach(p => {
+                minX = Math.min(minX, p[0]);
+                minY = Math.min(minY, p[1]);
+                maxX = Math.max(maxX, p[0]);
+                maxY = Math.max(maxY, p[1]);
+            });
+            newBlock.box = [minX, minY, maxX, maxY];
+            
+            jsonData.blocks.push(newBlock);
+            newPolygonPoints = [];
+        }
+
+        function toggleLineSelection(blockIndex, lineIndex) {
+            const findIndex = selectedLines.findIndex(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
             if (findIndex > -1) {
-                // 如果已選中，則取消選擇
                 selectedLines.splice(findIndex, 1);
             } else {
-                // 如果未選中，則加入選擇
                 selectedLines.push({ blockIndex, lineIndex });
             }
-            updateMergeButton();
+            updateActionButtons();
         }
-        
-        function updateMergeButton() {
+
+        function updateActionButtons() {
             const count = selectedLines.length;
-            mergeBtn.textContent = `合併選取 (${count})`;
+            mergeBtn.textContent = `合併 (${count})`;
             mergeBtn.disabled = count < 2;
+            deleteBtn.textContent = `刪除 (${count})`;
+            deleteBtn.disabled = count < 1;
         }
 
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
-
+            const linesToMerge = selectedLines.map(sel => ({
+                coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
+                text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
+                block: jsonData.blocks[sel.blockIndex]
+            }));
+            
             const newBlock = {
-                box: [],
-                vertical: false, // 可根據多數決或第一個元素決定
-                font_size: 0,
-                lines_coords: [],
-                lines: []
+                lines_coords: linesToMerge.map(l => l.coord),
+                lines: linesToMerge.map(l => l.text),
+                font_size: linesToMerge.reduce((sum, l) => sum + (l.block.font_size || 0), 0) / linesToMerge.length,
+                vertical: linesToMerge[0].block.vertical
             };
+            
+            deleteSelectedLines(false); // 刪除但不重繪
+            
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            newBlock.lines_coords.forEach(poly => poly.forEach(p => {
+                minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
+                maxX = Math.max(maxX, p[0]); maxY = Math.max(maxY, p[1]);
+            }));
+            newBlock.box = [minX, minY, maxX, maxY];
+            
+            jsonData.blocks.push(newBlock);
+            setMode(false, false);
+        }
 
-            let totalFontSize = 0;
-            const linesToRemove = [];
-
-            // 收集所有選中的 line
+        function deleteSelectedLines(resetMode = true) {
+            if (selectedLines.length < 1) return;
+            
+            selectedLines.sort((a, b) => b.blockIndex - a.blockIndex || b.lineIndex - a.lineIndex);
+            
             selectedLines.forEach(sel => {
                 const block = jsonData.blocks[sel.blockIndex];
-                const lineCoord = block.lines_coords[sel.lineIndex];
-                const lineText = block.lines[sel.lineIndex];
-                
-                newBlock.lines_coords.push(lineCoord);
-                newBlock.lines.push(lineText);
-                totalFontSize += block.font_size || 0;
-                
-                linesToRemove.push({ bIndex: sel.blockIndex, lIndex: sel.lineIndex });
+                block.lines_coords.splice(sel.lineIndex, 1);
+                block.lines.splice(sel.lineIndex, 1);
             });
             
-            newBlock.font_size = totalFontSize / selectedLines.length;
-            if (jsonData.blocks[selectedLines[0].blockIndex]) {
-                 newBlock.vertical = jsonData.blocks[selectedLines[0].blockIndex].vertical;
-            }
-
-            // 從後往前刪除，避免索引錯亂
-            linesToRemove.sort((a, b) => b.bIndex - a.bIndex || b.lIndex - a.lIndex);
-            linesToRemove.forEach(item => {
-                jsonData.blocks[item.bIndex].lines_coords.splice(item.lIndex, 1);
-                jsonData.blocks[item.bIndex].lines.splice(item.lIndex, 1);
-            });
-
-            // 移除空的 block
-            jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords.length > 0);
+            jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
             
-            // 重新計算新 block 的 box
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            newBlock.lines_coords.forEach(polygon => {
-                polygon.forEach(point => {
-                    minX = Math.min(minX, point[0]);
-                    minY = Math.min(minY, point[1]);
-                    maxX = Math.max(maxX, point[0]);
-                    maxY = Math.max(maxY, point[1]);
-                });
-            });
-            newBlock.box = [minX, minY, maxX, maxY];
-
-            // 將新 block 加入到資料中
-            jsonData.blocks.push(newBlock);
-
-            // 清空選取並重繪
-            selectedLines = [];
-            updateMergeButton();
-            drawVisualizations();
+            if(resetMode) setMode(false, false);
         }
 
         function exportJson() {
-            if (!jsonData) {
-                alert("沒有可匯出的資料！");
-                return;
-            }
+            if (!jsonData) { alert("沒有可匯出的資料！"); return; }
             const jsonString = JSON.stringify(jsonData, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
@@ -337,8 +367,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // --- 繪圖與輔助函式 ---
-
+        // --- 繪圖與輔助 ---
         function drawVisualizations() {
             if (!originalImage || !jsonData) return;
 
@@ -353,26 +382,20 @@
 
             jsonData.blocks.forEach((block, blockIndex) => {
                 if (showBlocks && block.box && block.box.length === 4) {
-                    ctx.strokeStyle = '#22c55e'; // 綠色
-                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                 }
 
                 if (block.lines_coords) {
                     block.lines_coords.forEach((linePolygon, lineIndex) => {
-                        const isSelected = selectedLines.some(
-                            sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex
-                        );
-                        
+                        const isSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
                         if (showLines) {
-                            ctx.strokeStyle = isSelected ? '#facc15' : '#3b82f6'; // 選中為黃色，否則為藍色
+                            ctx.strokeStyle = isSelected ? '#facc15' : '#3b82f6';
                             ctx.lineWidth = isSelected ? 4 : 2;
                             ctx.beginPath();
                             ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
-                            for (let i = 1; i < linePolygon.length; i++) {
-                                ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
-                            }
+                            for (let i = 1; i < linePolygon.length; i++) ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
                             ctx.closePath();
                             ctx.stroke();
                         }
@@ -383,14 +406,28 @@
                     const [x1, y1] = block.box;
                     const fontSize = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSize}px sans-serif`;
-                    ctx.fillStyle = 'white';
-                    ctx.strokeStyle = 'black';
-                    ctx.lineWidth = 3;
+                    ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
                     const textContent = `[${blockIndex}] ${block.lines.join(' ')}`;
                     ctx.strokeText(textContent, x1, y1 - 5);
                     ctx.fillText(textContent, x1, y1 - 5);
                 }
             });
+            
+            if (isDrawingMode && newPolygonPoints.length > 0) {
+                ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(newPolygonPoints[0][0], newPolygonPoints[0][1]);
+                for (let i = 1; i < newPolygonPoints.length; i++) ctx.lineTo(newPolygonPoints[i][0], newPolygonPoints[i][1]);
+                if (newPolygonPoints.length === 4) ctx.closePath();
+                ctx.stroke();
+                
+                newPolygonPoints.forEach(p => {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath();
+                    ctx.arc(p[0], p[1], 8, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
         }
 
         function isPointInPolygon(point, polygon) {
@@ -398,8 +435,7 @@
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
                 const xi = polygon[i].x, yi = polygon[i].y;
                 const xj = polygon[j].x, yj = polygon[j].y;
-                const intersect = ((yi > point.y) !== (yj > point.y))
-                    && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                const intersect = ((yi > point.y) !== (yj > point.y)) && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
                 if (intersect) isInside = !isInside;
             }
             return isInside;
