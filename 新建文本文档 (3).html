@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (Resize版)</title>
+    <title>JSON 標註互動式編輯工具 (變形版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -54,7 +54,7 @@
         }
         .select-mode canvas { cursor: pointer; }
         .draw-mode canvas { cursor: crosshair; }
-        .resize-mode canvas { cursor: move; }
+        .transform-mode canvas { cursor: default; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
@@ -62,7 +62,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (Resize版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (變形版)</h1>
             <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字、屬性與形狀，一站式完成標註修正。</p>
         </header>
 
@@ -93,7 +93,7 @@
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="selectModeBtn" class="btn btn-secondary w-full">選取模式</button>
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
-                            <button id="resizeModeBtn" class="btn btn-secondary w-full">修改 Line 框大小</button>
+                            <button id="transformModeBtn" class="btn btn-secondary w-full">變形 Line 框</button>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
@@ -145,7 +145,7 @@
         const editPanel = document.getElementById('editPanel');
         const selectModeBtn = document.getElementById('selectModeBtn');
         const drawModeBtn = document.getElementById('drawModeBtn');
-        const resizeModeBtn = document.getElementById('resizeModeBtn');
+        const transformModeBtn = document.getElementById('transformModeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -156,16 +156,22 @@
         // 應用程式狀態
         let originalImage = null;
         let jsonData = null;
-        let isSelectMode = false;
-        let isDrawingMode = false;
-        let isResizeMode = false;
+        let mode = null; // null, 'select', 'draw', 'transform'
         let selectedLines = [];
         
         let isDraggingRect = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
         
-        let draggedHandle = null; // { blockIndex, lineIndex, pointIndex }
+        let activeTransform = {
+            target: null, // { blockIndex, lineIndex }
+            action: null, // 'move', 'rotate', 'scale'
+            handleIndex: -1,
+            startPos: {x: 0, y: 0},
+            originalPoints: null,
+            center: {x: 0, y: 0},
+            startAngle: 0
+        };
         const HANDLE_RADIUS = 8;
 
         // --- 事件監聽器 ---
@@ -174,7 +180,7 @@
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         selectModeBtn.addEventListener('click', () => setMode('select'));
         drawModeBtn.addEventListener('click', () => setMode('draw'));
-        resizeModeBtn.addEventListener('click', () => setMode('resize'));
+        transformModeBtn.addEventListener('click', () => setMode('transform'));
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
@@ -233,21 +239,24 @@
         }
 
         // --- 編輯模式切換 ---
-        function setMode(mode) {
-            isSelectMode = mode === 'select';
-            isDrawingMode = mode === 'draw';
-            isResizeMode = mode === 'resize';
+        function setMode(newMode) {
+            if (mode === newMode) {
+                mode = null; // 再次點擊則取消模式
+            } else {
+                mode = newMode;
+            }
 
-            [selectModeBtn, drawModeBtn, resizeModeBtn].forEach(btn => btn.classList.replace('btn-danger', 'btn-secondary'));
-            if (isSelectMode) selectModeBtn.classList.replace('btn-secondary', 'btn-danger');
-            if (isDrawingMode) drawModeBtn.classList.replace('btn-secondary', 'btn-danger');
-            if (isResizeMode) resizeModeBtn.classList.replace('btn-secondary', 'btn-danger');
+            [selectModeBtn, drawModeBtn, transformModeBtn].forEach(btn => btn.classList.replace('btn-danger', 'btn-secondary'));
+            if (mode === 'select') selectModeBtn.classList.replace('btn-secondary', 'btn-danger');
+            if (mode === 'draw') drawModeBtn.classList.replace('btn-secondary', 'btn-danger');
+            if (mode === 'transform') transformModeBtn.classList.replace('btn-secondary', 'btn-danger');
             
-            mainCanvas.parentElement.parentElement.classList.toggle('select-mode', isSelectMode);
-            mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
-            mainCanvas.parentElement.parentElement.classList.toggle('resize-mode', isResizeMode);
+            mainCanvas.parentElement.parentElement.classList.toggle('select-mode', mode === 'select');
+            mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', mode === 'draw');
+            mainCanvas.parentElement.parentElement.classList.toggle('transform-mode', mode === 'transform');
             
-            if (!isSelectMode) selectedLines = [];
+            if (mode !== 'select') selectedLines = [];
+            if (mode !== 'transform') activeTransform.target = null;
             
             updateActionButtons();
             drawVisualizations();
@@ -262,34 +271,77 @@
         }
 
         function handleCanvasClick(e) {
-            if (isSelectMode) handleSelection(getMousePos(e));
+            const pos = getMousePos(e);
+            if (mode === 'select') {
+                handleSelection(pos);
+            } else if (mode === 'transform') {
+                activeTransform.target = findLineAt(pos);
+                drawVisualizations();
+            }
         }
 
         function handleMouseDown(e) {
             const pos = getMousePos(e);
-            if (isDrawingMode) {
+            if (mode === 'draw') {
                 isDraggingRect = true;
                 startDragPoint = pos;
                 currentRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
-            } else if (isResizeMode) {
-                draggedHandle = findHandleAt(pos);
+            } else if (mode === 'transform' && activeTransform.target) {
+                const { blockIndex, lineIndex } = activeTransform.target;
+                const line = jsonData.blocks[blockIndex].lines_coords[lineIndex];
+                const handles = getHandlesForLine(line);
+                
+                for (let i = 0; i < handles.length; i++) {
+                    const handle = handles[i];
+                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS) {
+                        activeTransform.action = handle.type;
+                        activeTransform.handleIndex = i;
+                        activeTransform.startPos = pos;
+                        activeTransform.originalPoints = JSON.parse(JSON.stringify(line));
+                        activeTransform.center = getPolygonCenter(line);
+                        if (handle.type === 'rotate') {
+                            activeTransform.startAngle = Math.atan2(pos.y - activeTransform.center.y, pos.x - activeTransform.center.x);
+                        }
+                        return;
+                    }
+                }
+                
+                if (isPointInPolygon(pos, line.map(p => ({x:p[0], y:p[1]})))) {
+                    activeTransform.action = 'move';
+                    activeTransform.startPos = pos;
+                    activeTransform.originalPoints = JSON.parse(JSON.stringify(line));
+                }
             }
         }
 
         function handleMouseMove(e) {
             const pos = getMousePos(e);
-            if (isDrawingMode && isDraggingRect) {
+            if (mode === 'draw' && isDraggingRect) {
                 currentRect.w = pos.x - startDragPoint.x;
                 currentRect.h = pos.y - startDragPoint.y;
-            } else if (isResizeMode && draggedHandle) {
-                const { blockIndex, lineIndex, pointIndex } = draggedHandle;
-                jsonData.blocks[blockIndex].lines_coords[lineIndex][pointIndex] = [pos.x, pos.y];
+            } else if (mode === 'transform' && activeTransform.action) {
+                const dx = pos.x - activeTransform.startPos.x;
+                const dy = pos.y - activeTransform.startPos.y;
+                const { blockIndex, lineIndex } = activeTransform.target;
+                let newPoints = activeTransform.originalPoints.map(p => [p[0], p[1]]);
+
+                if (activeTransform.action === 'move') {
+                    newPoints = newPoints.map(p => [p[0] + dx, p[1] + dy]);
+                } else if (activeTransform.action === 'rotate') {
+                    const currentAngle = Math.atan2(pos.y - activeTransform.center.y, pos.x - activeTransform.center.x);
+                    const angleDiff = currentAngle - activeTransform.startAngle;
+                    newPoints = rotatePolygon(newPoints, activeTransform.center, angleDiff);
+                } else if (activeTransform.action === 'scale') {
+                    newPoints = scalePolygon(newPoints, activeTransform.center, activeTransform.handleIndex, pos);
+                }
+                
+                jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPoints;
             }
             drawVisualizations();
         }
 
         function handleMouseUp(e) {
-            if (isDrawingMode && isDraggingRect) {
+            if (mode === 'draw' && isDraggingRect) {
                 isDraggingRect = false;
                 const x1 = Math.min(startDragPoint.x, startDragPoint.x + currentRect.w);
                 const y1 = Math.min(startDragPoint.y, startDragPoint.y + currentRect.h);
@@ -305,39 +357,31 @@
                 }
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
                 setMode(null);
-            } else if (isResizeMode && draggedHandle) {
-                recalculateBoxForBlock(jsonData.blocks[draggedHandle.blockIndex]);
-                draggedHandle = null;
+            } else if (mode === 'transform' && activeTransform.action) {
+                recalculateBoxForBlock(jsonData.blocks[activeTransform.target.blockIndex]);
+                activeTransform.action = null;
+                activeTransform.handleIndex = -1;
                 drawVisualizations();
             }
         }
         
         function handleMouseOut(e) {
-            if (isDrawingMode && isDraggingRect) {
+            if (mode === 'draw' && isDraggingRect) {
                 isDraggingRect = false;
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
                 drawVisualizations();
             }
-            if (isResizeMode && draggedHandle) {
-                recalculateBoxForBlock(jsonData.blocks[draggedHandle.blockIndex]);
-                draggedHandle = null;
+            if (mode === 'transform' && activeTransform.action) {
+                recalculateBoxForBlock(jsonData.blocks[activeTransform.target.blockIndex]);
+                activeTransform.action = null;
                 drawVisualizations();
             }
         }
 
         function handleSelection(point) {
-            let lineClicked = false;
-            for (let i = 0; i < jsonData.blocks.length; i++) {
-                if (!jsonData.blocks[i].lines_coords) continue;
-                for (let j = 0; j < jsonData.blocks[i].lines_coords.length; j++) {
-                    const polygon = jsonData.blocks[i].lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
-                    if (isPointInPolygon(point, polygon)) {
-                        toggleLineSelection(i, j);
-                        lineClicked = true;
-                        break;
-                    }
-                }
-                if (lineClicked) break;
+            let lineClicked = findLineAt(point);
+            if (lineClicked) {
+                toggleLineSelection(lineClicked.blockIndex, lineClicked.lineIndex);
             }
             drawVisualizations();
         }
@@ -479,21 +523,24 @@
                 if (block.lines_coords) {
                     block.lines_coords.forEach((linePolygon, lineIndex) => {
                         const isSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
+                        const isActiveTransform = activeTransform.target && activeTransform.target.blockIndex === blockIndex && activeTransform.target.lineIndex === lineIndex;
+                        
                         if (showLines) {
-                            ctx.strokeStyle = isSelected ? '#facc15' : '#3b82f6';
-                            ctx.lineWidth = isSelected ? 4 : 2;
+                            ctx.strokeStyle = isSelected ? '#facc15' : (isActiveTransform ? '#ef4444' : '#3b82f6');
+                            ctx.lineWidth = (isSelected || isActiveTransform) ? 4 : 2;
                             ctx.beginPath();
                             ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
                             for (let i = 1; i < linePolygon.length; i++) ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
                             ctx.closePath();
                             ctx.stroke();
                         }
-                        // 在 Resize 模式下繪製控制點
-                        if (isResizeMode) {
-                            linePolygon.forEach(point => {
+                        
+                        if (mode === 'transform' && isActiveTransform) {
+                            const handles = getHandlesForLine(linePolygon);
+                            handles.forEach(handle => {
                                 ctx.beginPath();
-                                ctx.arc(point[0], point[1], HANDLE_RADIUS, 0, 2 * Math.PI);
-                                ctx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // 半透明紅色
+                                ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
+                                ctx.fillStyle = handle.type === 'rotate' ? 'rgba(139, 92, 246, 0.9)' : 'rgba(239, 68, 68, 0.9)';
                                 ctx.fill();
                             });
                         }
@@ -512,7 +559,7 @@
                 }
             });
             
-            if (isDrawingMode && isDraggingRect) {
+            if (mode === 'draw' && isDraggingRect) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
                 ctx.strokeStyle = '#f59e0b';
                 ctx.lineWidth = 2;
@@ -521,6 +568,7 @@
             }
         }
 
+        // --- 幾何計算輔助函式 ---
         function isPointInPolygon(point, polygon) {
             let isInside = false;
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -531,21 +579,61 @@
             }
             return isInside;
         }
-        
-        function findHandleAt(pos) {
-            for (let i = 0; i < jsonData.blocks.length; i++) {
+
+        function findLineAt(pos) {
+            for (let i = jsonData.blocks.length - 1; i >= 0; i--) {
                 if (!jsonData.blocks[i].lines_coords) continue;
                 for (let j = 0; j < jsonData.blocks[i].lines_coords.length; j++) {
-                    for (let k = 0; k < jsonData.blocks[i].lines_coords[j].length; k++) {
-                        const point = jsonData.blocks[i].lines_coords[j][k];
-                        const distance = Math.hypot(pos.x - point[0], pos.y - point[1]);
-                        if (distance <= HANDLE_RADIUS) {
-                            return { blockIndex: i, lineIndex: j, pointIndex: k };
-                        }
+                    const polygon = jsonData.blocks[i].lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
+                    if (isPointInPolygon(pos, polygon)) {
+                        return { blockIndex: i, lineIndex: j };
                     }
                 }
             }
             return null;
+        }
+
+        function getPolygonCenter(polygon) {
+            let x = 0, y = 0;
+            polygon.forEach(p => { x += p[0]; y += p[1]; });
+            return { x: x / polygon.length, y: y / polygon.length };
+        }
+
+        function getHandlesForLine(line) {
+            const handles = line.map(p => ({ x: p[0], y: p[1], type: 'scale' }));
+            const topCenter = { x: (line[0][0] + line[1][0]) / 2, y: (line[0][1] + line[1][1]) / 2 };
+            const center = getPolygonCenter(line);
+            const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
+            const rotateHandle = {
+                x: topCenter.x + Math.cos(angle) * 20,
+                y: topCenter.y + Math.sin(angle) * 20,
+                type: 'rotate'
+            };
+            handles.push(rotateHandle);
+            return handles;
+        }
+
+        function rotatePolygon(points, center, angle) {
+            return points.map(p => {
+                const x = p[0] - center.x;
+                const y = p[1] - center.y;
+                const newX = x * Math.cos(angle) - y * Math.sin(angle);
+                const newY = x * Math.sin(angle) + y * Math.cos(angle);
+                return [newX + center.x, newY + center.y];
+            });
+        }
+
+        function scalePolygon(points, center, handleIndex, newPos) {
+            const originalHandle = activeTransform.originalPoints[handleIndex];
+            const originalDist = Math.hypot(originalHandle[0] - center.x, originalHandle[1] - center.y);
+            const newDist = Math.hypot(newPos.x - center.x, newPos.y - center.y);
+            if (originalDist < 1) return points;
+            const scale = newDist / originalDist;
+            return activeTransform.originalPoints.map(p => {
+                const x = p[0] - center.x;
+                const y = p[1] - center.y;
+                return [x * scale + center.x, y * scale + center.y];
+            });
         }
         
         function recalculateBoxForBlock(block) {
