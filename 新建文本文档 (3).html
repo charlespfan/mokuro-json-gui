@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (連續操作修正版)</title>
+    <title>JSON 標註互動式編輯工具 (Resize版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -54,6 +54,7 @@
         }
         .select-mode canvas { cursor: pointer; }
         .draw-mode canvas { cursor: crosshair; }
+        .resize-mode canvas { cursor: move; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
@@ -61,8 +62,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (連續操作修正版)</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字與屬性，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (Resize版)</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字、屬性與形狀，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -90,8 +91,9 @@
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
-                            <button id="selectModeBtn" class="btn btn-secondary w-full">進入/退出選取模式</button>
+                            <button id="selectModeBtn" class="btn btn-secondary w-full">選取模式</button>
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
+                            <button id="resizeModeBtn" class="btn btn-secondary w-full">修改 Line 框大小</button>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
@@ -143,6 +145,7 @@
         const editPanel = document.getElementById('editPanel');
         const selectModeBtn = document.getElementById('selectModeBtn');
         const drawModeBtn = document.getElementById('drawModeBtn');
+        const resizeModeBtn = document.getElementById('resizeModeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -155,19 +158,23 @@
         let jsonData = null;
         let isSelectMode = false;
         let isDrawingMode = false;
+        let isResizeMode = false;
         let selectedLines = [];
         
-        // 用於拖曳繪製的狀態變數
-        let isDragging = false;
+        let isDraggingRect = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
+        
+        let draggedHandle = null; // { blockIndex, lineIndex, pointIndex }
+        const HANDLE_RADIUS = 8;
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
         jsonInput.addEventListener('change', loadJson);
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
-        selectModeBtn.addEventListener('click', toggleSelectMode);
-        drawModeBtn.addEventListener('click', toggleDrawMode);
+        selectModeBtn.addEventListener('click', () => setMode('select'));
+        drawModeBtn.addEventListener('click', () => setMode('draw'));
+        resizeModeBtn.addEventListener('click', () => setMode('resize'));
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
@@ -226,20 +233,19 @@
         }
 
         // --- 編輯模式切換 ---
-        function setMode(select, draw) {
-            isSelectMode = select;
-            isDrawingMode = draw;
+        function setMode(mode) {
+            isSelectMode = mode === 'select';
+            isDrawingMode = mode === 'draw';
+            isResizeMode = mode === 'resize';
 
-            selectModeBtn.textContent = isSelectMode ? '退出選取模式' : '進入選取模式';
-            selectModeBtn.classList.toggle('btn-danger', isSelectMode);
-            selectModeBtn.classList.toggle('btn-secondary', !isSelectMode);
+            [selectModeBtn, drawModeBtn, resizeModeBtn].forEach(btn => btn.classList.replace('btn-danger', 'btn-secondary'));
+            if (isSelectMode) selectModeBtn.classList.replace('btn-secondary', 'btn-danger');
+            if (isDrawingMode) drawModeBtn.classList.replace('btn-secondary', 'btn-danger');
+            if (isResizeMode) resizeModeBtn.classList.replace('btn-secondary', 'btn-danger');
             
-            drawModeBtn.textContent = isDrawingMode ? '正在繪製...' : '拖曳新增矩形框';
-            drawModeBtn.classList.toggle('btn-warning', isDrawingMode);
-            drawModeBtn.classList.toggle('btn-secondary', !isDrawingMode);
-
             mainCanvas.parentElement.parentElement.classList.toggle('select-mode', isSelectMode);
             mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
+            mainCanvas.parentElement.parentElement.classList.toggle('resize-mode', isResizeMode);
             
             if (!isSelectMode) selectedLines = [];
             
@@ -247,10 +253,7 @@
             drawVisualizations();
         }
 
-        function toggleSelectMode() { setMode(!isSelectMode, false); }
-        function toggleDrawMode() { setMode(false, !isDrawingMode); }
-
-        // --- 畫布事件處理 (點擊 vs 拖曳) ---
+        // --- 畫布事件處理 ---
         function getMousePos(e) {
             const rect = mainCanvas.getBoundingClientRect();
             const scaleX = mainCanvas.width / rect.width;
@@ -259,31 +262,35 @@
         }
 
         function handleCanvasClick(e) {
-            if (isSelectMode) {
-                handleSelection(getMousePos(e));
-            }
+            if (isSelectMode) handleSelection(getMousePos(e));
         }
 
         function handleMouseDown(e) {
+            const pos = getMousePos(e);
             if (isDrawingMode) {
-                isDragging = true;
-                startDragPoint = getMousePos(e);
-                currentRect = { x: startDragPoint.x, y: startDragPoint.y, w: 0, h: 0 };
+                isDraggingRect = true;
+                startDragPoint = pos;
+                currentRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
+            } else if (isResizeMode) {
+                draggedHandle = findHandleAt(pos);
             }
         }
 
         function handleMouseMove(e) {
-            if (isDrawingMode && isDragging) {
-                const currentPos = getMousePos(e);
-                currentRect.w = currentPos.x - startDragPoint.x;
-                currentRect.h = currentPos.y - startDragPoint.y;
-                drawVisualizations();
+            const pos = getMousePos(e);
+            if (isDrawingMode && isDraggingRect) {
+                currentRect.w = pos.x - startDragPoint.x;
+                currentRect.h = pos.y - startDragPoint.y;
+            } else if (isResizeMode && draggedHandle) {
+                const { blockIndex, lineIndex, pointIndex } = draggedHandle;
+                jsonData.blocks[blockIndex].lines_coords[lineIndex][pointIndex] = [pos.x, pos.y];
             }
+            drawVisualizations();
         }
 
         function handleMouseUp(e) {
-            if (isDrawingMode && isDragging) {
-                isDragging = false;
+            if (isDrawingMode && isDraggingRect) {
+                isDraggingRect = false;
                 const x1 = Math.min(startDragPoint.x, startDragPoint.x + currentRect.w);
                 const y1 = Math.min(startDragPoint.y, startDragPoint.y + currentRect.h);
                 const x2 = Math.max(startDragPoint.x, startDragPoint.x + currentRect.w);
@@ -297,14 +304,23 @@
                     }
                 }
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
-                setMode(false, false);
+                setMode(null);
+            } else if (isResizeMode && draggedHandle) {
+                recalculateBoxForBlock(jsonData.blocks[draggedHandle.blockIndex]);
+                draggedHandle = null;
+                drawVisualizations();
             }
         }
         
         function handleMouseOut(e) {
-            if (isDrawingMode && isDragging) {
-                isDragging = false;
+            if (isDrawingMode && isDraggingRect) {
+                isDraggingRect = false;
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
+                drawVisualizations();
+            }
+            if (isResizeMode && draggedHandle) {
+                recalculateBoxForBlock(jsonData.blocks[draggedHandle.blockIndex]);
+                draggedHandle = null;
                 drawVisualizations();
             }
         }
@@ -312,10 +328,9 @@
         function handleSelection(point) {
             let lineClicked = false;
             for (let i = 0; i < jsonData.blocks.length; i++) {
-                const block = jsonData.blocks[i];
-                if (!block.lines_coords) continue;
-                for (let j = 0; j < block.lines_coords.length; j++) {
-                    const polygon = block.lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
+                if (!jsonData.blocks[i].lines_coords) continue;
+                for (let j = 0; j < jsonData.blocks[i].lines_coords.length; j++) {
+                    const polygon = jsonData.blocks[i].lines_coords[j].map(p => ({ x: p[0], y: p[1] }));
                     if (isPointInPolygon(point, polygon)) {
                         toggleLineSelection(i, j);
                         lineClicked = true;
@@ -329,13 +344,7 @@
 
         // --- 核心編輯邏輯 ---
         function addNewLine(text, polygon) {
-            const newBlock = {
-                box: [],
-                vertical: false,
-                font_size: 20,
-                lines_coords: [polygon],
-                lines: [text]
-            };
+            const newBlock = { box: [], vertical: false, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
@@ -352,9 +361,7 @@
 
         function updateActionButtons() {
             const count = selectedLines.length;
-            mergeBtn.textContent = `合併 (${count})`;
             mergeBtn.disabled = count < 2;
-            deleteBtn.textContent = `刪除 (${count})`;
             deleteBtn.disabled = count < 1;
             splitBtn.disabled = count !== 1 || (count === 1 && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
             editTextBtn.disabled = count !== 1;
@@ -364,9 +371,8 @@
         function editSelectedLineText() {
             if (selectedLines.length !== 1) return;
             const { blockIndex, lineIndex } = selectedLines[0];
-            const currentText = jsonData.blocks[blockIndex].lines[lineIndex];
-            const newText = prompt("請輸入新的文字內容:", currentText);
-            if (newText !== null && newText !== currentText) {
+            const newText = prompt("請輸入新的文字內容:", jsonData.blocks[blockIndex].lines[lineIndex]);
+            if (newText !== null) {
                 jsonData.blocks[blockIndex].lines[lineIndex] = newText;
                 resetSelectionAndRedraw();
             }
@@ -389,7 +395,6 @@
             const { blockIndex } = selectedLines[0];
             const blockToSplit = jsonData.blocks[blockIndex];
             if (blockToSplit.lines.length < 2) return;
-
             const newBlocks = blockToSplit.lines.map((lineText, lineIndex) => {
                 const newBlock = { ...blockToSplit, lines: [lineText], lines_coords: [blockToSplit.lines_coords[lineIndex]], box: [] };
                 recalculateBoxForBlock(newBlock);
@@ -432,14 +437,11 @@
             if (redraw) resetSelectionAndRedraw();
         }
         
-        // *** 核心修正 ***
-        // 建立一個統一的函式來重設選取狀態並重繪，避免退出模式
         function resetSelectionAndRedraw() {
             selectedLines = [];
             updateActionButtons();
             drawVisualizations();
         }
-
 
         function exportJson() {
             if (!jsonData) { alert("沒有可匯出的資料！"); return; }
@@ -486,6 +488,15 @@
                             ctx.closePath();
                             ctx.stroke();
                         }
+                        // 在 Resize 模式下繪製控制點
+                        if (isResizeMode) {
+                            linePolygon.forEach(point => {
+                                ctx.beginPath();
+                                ctx.arc(point[0], point[1], HANDLE_RADIUS, 0, 2 * Math.PI);
+                                ctx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // 半透明紅色
+                                ctx.fill();
+                            });
+                        }
                     });
                 }
                 
@@ -501,7 +512,7 @@
                 }
             });
             
-            if (isDrawingMode && isDragging) {
+            if (isDrawingMode && isDraggingRect) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
                 ctx.strokeStyle = '#f59e0b';
                 ctx.lineWidth = 2;
@@ -519,6 +530,22 @@
                 if (intersect) isInside = !isInside;
             }
             return isInside;
+        }
+        
+        function findHandleAt(pos) {
+            for (let i = 0; i < jsonData.blocks.length; i++) {
+                if (!jsonData.blocks[i].lines_coords) continue;
+                for (let j = 0; j < jsonData.blocks[i].lines_coords.length; j++) {
+                    for (let k = 0; k < jsonData.blocks[i].lines_coords[j].length; k++) {
+                        const point = jsonData.blocks[i].lines_coords[j][k];
+                        const distance = Math.hypot(pos.x - point[0], pos.y - point[1]);
+                        if (distance <= HANDLE_RADIUS) {
+                            return { blockIndex: i, lineIndex: j, pointIndex: k };
+                        }
+                    }
+                }
+            }
+            return null;
         }
         
         function recalculateBoxForBlock(block) {
