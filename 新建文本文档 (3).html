@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (完全版)</title>
+    <title>JSON 標註互動式編輯工具 (拖曳繪製版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -50,7 +50,8 @@
             height: auto;
             background-color: #374151;
         }
-        .edit-mode canvas, .draw-mode canvas { cursor: pointer; }
+        .select-mode canvas { cursor: pointer; }
+        .draw-mode canvas { cursor: crosshair; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
@@ -58,8 +59,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (完全版)</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、新增、修改文字，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (拖曳繪製版)</h1>
+            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字，一站式完成標註修正。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -88,7 +89,7 @@
                         <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="selectModeBtn" class="btn btn-secondary w-full">進入/退出選取模式</button>
-                            <button id="drawModeBtn" class="btn btn-secondary w-full">新增 Line 框</button>
+                            <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
@@ -151,7 +152,11 @@
         let isSelectMode = false;
         let isDrawingMode = false;
         let selectedLines = [];
-        let newPolygonPoints = [];
+        
+        // 新增：用於拖曳繪製的狀態變數
+        let isDragging = false;
+        let startDragPoint = { x: 0, y: 0 };
+        let currentRect = { x: 0, y: 0, w: 0, h: 0 };
 
         // --- 事件監聽器 ---
         imageInput.addEventListener('change', loadImage);
@@ -164,7 +169,14 @@
         splitBtn.addEventListener('click', splitSelectedBlock);
         editTextBtn.addEventListener('click', editSelectedLineText);
         exportBtn.addEventListener('click', exportJson);
+        
+        // 修改：分離點擊和拖曳事件
         mainCanvas.addEventListener('click', handleCanvasClick);
+        mainCanvas.addEventListener('mousedown', handleMouseDown);
+        mainCanvas.addEventListener('mousemove', handleMouseMove);
+        mainCanvas.addEventListener('mouseup', handleMouseUp);
+        mainCanvas.addEventListener('mouseout', handleMouseOut);
+
 
         // --- 檔案載入 ---
         function loadImage(e) {
@@ -218,7 +230,7 @@
             selectModeBtn.classList.toggle('btn-danger', isSelectMode);
             selectModeBtn.classList.toggle('btn-secondary', !isSelectMode);
             
-            drawModeBtn.textContent = isDrawingMode ? `正在繪製 (${newPolygonPoints.length}/4)` : '新增 Line 框';
+            drawModeBtn.textContent = isDrawingMode ? '正在繪製...' : '拖曳新增矩形框';
             drawModeBtn.classList.toggle('btn-warning', isDrawingMode);
             drawModeBtn.classList.toggle('btn-secondary', !isDrawingMode);
 
@@ -226,7 +238,6 @@
             mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
             
             if (!isSelectMode) selectedLines = [];
-            if (!isDrawingMode) newPolygonPoints = [];
             
             updateActionButtons();
             drawVisualizations();
@@ -235,17 +246,66 @@
         function toggleSelectMode() { setMode(!isSelectMode, false); }
         function toggleDrawMode() { setMode(false, !isDrawingMode); }
 
-        // --- 畫布點擊處理 ---
-        function handleCanvasClick(e) {
-            if (!isSelectMode && !isDrawingMode) return;
+        // --- 畫布事件處理 (點擊 vs 拖曳) ---
+        function getMousePos(e) {
             const rect = mainCanvas.getBoundingClientRect();
             const scaleX = mainCanvas.width / rect.width;
             const scaleY = mainCanvas.height / rect.height;
-            const clickPoint = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
-            if (isSelectMode) handleSelection(clickPoint);
-            if (isDrawingMode) handleDrawing(clickPoint);
+            return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+        }
+
+        function handleCanvasClick(e) {
+            if (isSelectMode) {
+                handleSelection(getMousePos(e));
+            }
+        }
+
+        function handleMouseDown(e) {
+            if (isDrawingMode) {
+                isDragging = true;
+                startDragPoint = getMousePos(e);
+                currentRect = { x: startDragPoint.x, y: startDragPoint.y, w: 0, h: 0 };
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (isDrawingMode && isDragging) {
+                const currentPos = getMousePos(e);
+                currentRect.w = currentPos.x - startDragPoint.x;
+                currentRect.h = currentPos.y - startDragPoint.y;
+                drawVisualizations();
+            }
+        }
+
+        function handleMouseUp(e) {
+            if (isDrawingMode && isDragging) {
+                isDragging = false;
+                // 確保寬高為正值
+                const x1 = Math.min(startDragPoint.x, startDragPoint.x + currentRect.w);
+                const y1 = Math.min(startDragPoint.y, startDragPoint.y + currentRect.h);
+                const x2 = Math.max(startDragPoint.x, startDragPoint.x + currentRect.w);
+                const y2 = Math.max(startDragPoint.y, startDragPoint.y + currentRect.h);
+
+                if (x2 - x1 > 5 && y2 - y1 > 5) { // 避免誤觸
+                    const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
+                    if (text !== null) {
+                        const newPolygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+                        addNewLine(text, newPolygon);
+                    }
+                }
+                currentRect = { x: 0, y: 0, w: 0, h: 0 };
+                setMode(false, false);
+            }
         }
         
+        function handleMouseOut(e) {
+            if (isDrawingMode && isDragging) {
+                isDragging = false;
+                currentRect = { x: 0, y: 0, w: 0, h: 0 };
+                drawVisualizations();
+            }
+        }
+
         function handleSelection(point) {
             let lineClicked = false;
             for (let i = 0; i < jsonData.blocks.length; i++) {
@@ -264,31 +324,17 @@
             drawVisualizations();
         }
 
-        function handleDrawing(point) {
-            newPolygonPoints.push([point.x, point.y]);
-            drawModeBtn.textContent = `正在繪製 (${newPolygonPoints.length}/4)`;
-            if (newPolygonPoints.length === 4) {
-                const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
-                if (text !== null) { // Check if user clicked OK
-                    addNewLine(text);
-                }
-                setMode(false, false);
-            }
-            drawVisualizations();
-        }
-
         // --- 核心編輯邏輯 ---
-        function addNewLine(text) {
+        function addNewLine(text, polygon) {
             const newBlock = {
                 box: [],
                 vertical: false,
                 font_size: 20,
-                lines_coords: [newPolygonPoints],
+                lines_coords: [polygon],
                 lines: [text]
             };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
-            newPolygonPoints = [];
         }
 
         function toggleLineSelection(blockIndex, lineIndex) {
@@ -330,7 +376,7 @@
 
             const newBlocks = blockToSplit.lines.map((lineText, lineIndex) => {
                 const newBlock = {
-                    ...blockToSplit, // Inherit properties like vertical, font_size
+                    ...blockToSplit,
                     lines: [lineText],
                     lines_coords: [blockToSplit.lines_coords[lineIndex]],
                     box: []
@@ -339,7 +385,6 @@
                 return newBlock;
             });
             
-            // Remove the old block and add the new ones
             jsonData.blocks.splice(blockIndex, 1, ...newBlocks);
             setMode(false, false);
         }
@@ -440,20 +485,13 @@
                 }
             });
             
-            if (isDrawingMode && newPolygonPoints.length > 0) {
-                ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(newPolygonPoints[0][0], newPolygonPoints[0][1]);
-                for (let i = 1; i < newPolygonPoints.length; i++) ctx.lineTo(newPolygonPoints[i][0], newPolygonPoints[i][1]);
-                if (newPolygonPoints.length === 4) ctx.closePath();
-                ctx.stroke();
-                
-                newPolygonPoints.forEach(p => {
-                    ctx.fillStyle = '#ef4444';
-                    ctx.beginPath();
-                    ctx.arc(p[0], p[1], 8, 0, 2 * Math.PI);
-                    ctx.fill();
-                });
+            // 新增：繪製正在拖曳的矩形
+            if (isDrawingMode && isDragging) {
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.3)'; // 半透明黃色
+                ctx.strokeStyle = '#f59e0b'; // 黃色
+                ctx.lineWidth = 2;
+                ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+                ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
             }
         }
 
