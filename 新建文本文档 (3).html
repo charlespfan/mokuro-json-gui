@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (邊緣拖曳版)</title>
+    <title>JSON 標註互動式編輯工具 (終極版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -43,6 +43,9 @@
         .btn-purple:hover { background-color: #7c3aed; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
+        .btn.active {
+            box-shadow: 0 0 0 3px #1f2937, 0 0 0 5px #f59e0b;
+        }
         .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
         
         canvas {
@@ -51,10 +54,9 @@
             max-width: 100%;
             height: auto;
             background-color: #374151;
+            cursor: default;
         }
-        .select-mode canvas { cursor: pointer; }
         .draw-mode canvas { cursor: crosshair; }
-        .transform-mode canvas { cursor: default; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
     </style>
@@ -62,8 +64,8 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (邊緣拖曳版)</h1>
-            <p class="mt-2 text-lg text-gray-400">視覺化、點選、合併、拆分、刪除、拖曳新增、修改文字、屬性與形狀，一站式完成標註修正。</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (終極版)</h1>
+            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -91,9 +93,8 @@
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">2. 編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
-                            <button id="selectModeBtn" class="btn btn-secondary w-full">選取模式</button>
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
-                            <button id="transformModeBtn" class="btn btn-secondary w-full">變形 Line 框</button>
+                            <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
@@ -109,7 +110,7 @@
                         <h3 class="text-lg font-semibold mb-4">顯示選項</h3>
                         <div class="space-y-3">
                             <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃)</label>
+                            <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃/紅)</label>
                             <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字與屬性 (白色)</label>
                         </div>
                     </div>
@@ -143,9 +144,7 @@
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
         const editPanel = document.getElementById('editPanel');
-        const selectModeBtn = document.getElementById('selectModeBtn');
         const drawModeBtn = document.getElementById('drawModeBtn');
-        const transformModeBtn = document.getElementById('transformModeBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -156,15 +155,15 @@
         // 應用程式狀態
         let originalImage = null;
         let jsonData = null;
-        let mode = null; // null, 'select', 'draw', 'transform'
-        let selectedLines = [];
+        let isDrawingMode = false;
+        let selectedLines = []; // 用於多選
+        let activeTarget = null; // 用於單選變形 { blockIndex, lineIndex }
         
         let isDraggingRect = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
         
         let activeTransform = {
-            target: null, // { blockIndex, lineIndex }
             action: null, // 'move', 'rotate', 'scale', 'move-edge'
             handleIndex: -1,
             startPos: {x: 0, y: 0},
@@ -178,9 +177,7 @@
         imageInput.addEventListener('change', loadImage);
         jsonInput.addEventListener('change', loadJson);
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
-        selectModeBtn.addEventListener('click', () => setMode('select'));
-        drawModeBtn.addEventListener('click', () => setMode('draw'));
-        transformModeBtn.addEventListener('click', () => setMode('transform'));
+        drawModeBtn.addEventListener('click', toggleDrawMode);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
@@ -188,7 +185,6 @@
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         exportBtn.addEventListener('click', exportJson);
         
-        mainCanvas.addEventListener('click', handleCanvasClick);
         mainCanvas.addEventListener('mousedown', handleMouseDown);
         mainCanvas.addEventListener('mousemove', handleMouseMove);
         mainCanvas.addEventListener('mouseup', handleMouseUp);
@@ -239,27 +235,19 @@
         }
 
         // --- 編輯模式切換 ---
-        function setMode(newMode) {
-            if (mode === newMode) {
-                mode = null; // 再次點擊則取消模式
-            } else {
-                mode = newMode;
+        function toggleDrawMode() {
+            isDrawingMode = !isDrawingMode;
+            drawModeBtn.classList.toggle('active', isDrawingMode);
+            drawModeBtn.classList.toggle('btn-warning', isDrawingMode);
+            drawModeBtn.classList.toggle('btn-secondary', !isDrawingMode);
+            mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', isDrawingMode);
+            // 進入繪製模式時，取消所有選取
+            if (isDrawingMode) {
+                selectedLines = [];
+                activeTarget = null;
+                updateActionButtons();
+                drawVisualizations();
             }
-
-            [selectModeBtn, drawModeBtn, transformModeBtn].forEach(btn => btn.classList.replace('btn-danger', 'btn-secondary'));
-            if (mode === 'select') selectModeBtn.classList.replace('btn-secondary', 'btn-danger');
-            if (mode === 'draw') drawModeBtn.classList.replace('btn-secondary', 'btn-danger');
-            if (mode === 'transform') transformModeBtn.classList.replace('btn-secondary', 'btn-danger');
-            
-            mainCanvas.parentElement.parentElement.classList.toggle('select-mode', mode === 'select');
-            mainCanvas.parentElement.parentElement.classList.toggle('draw-mode', mode === 'draw');
-            mainCanvas.parentElement.parentElement.classList.toggle('transform-mode', mode === 'transform');
-            
-            if (mode !== 'select') selectedLines = [];
-            if (mode !== 'transform') activeTransform.target = null;
-            
-            updateActionButtons();
-            drawVisualizations();
         }
 
         // --- 畫布事件處理 ---
@@ -270,24 +258,18 @@
             return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
         }
 
-        function handleCanvasClick(e) {
-            const pos = getMousePos(e);
-            if (mode === 'select') {
-                handleSelection(pos);
-            } else if (mode === 'transform') {
-                activeTransform.target = findLineAt(pos);
-                drawVisualizations();
-            }
-        }
-
         function handleMouseDown(e) {
             const pos = getMousePos(e);
-            if (mode === 'draw') {
+            if (isDrawingMode) {
                 isDraggingRect = true;
                 startDragPoint = pos;
                 currentRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
-            } else if (mode === 'transform' && activeTransform.target) {
-                const { blockIndex, lineIndex } = activeTransform.target;
+                return;
+            }
+
+            // 變形邏輯
+            if (activeTarget) {
+                const { blockIndex, lineIndex } = activeTarget;
                 const line = jsonData.blocks[blockIndex].lines_coords[lineIndex];
                 const handles = getHandlesForLine(line);
                 
@@ -305,24 +287,39 @@
                         return;
                     }
                 }
-                
-                if (isPointInPolygon(pos, line.map(p => ({x:p[0], y:p[1]})))) {
-                    activeTransform.action = 'move';
-                    activeTransform.startPos = pos;
-                    activeTransform.originalPoints = JSON.parse(JSON.stringify(line));
-                }
             }
+
+            // 選取邏輯
+            const clickedLine = findLineAt(pos);
+            if (e.shiftKey) { // 多選
+                if (clickedLine) {
+                    toggleLineSelection(clickedLine.blockIndex, clickedLine.lineIndex);
+                }
+            } else { // 單選
+                activeTarget = clickedLine;
+                selectedLines = clickedLine ? [clickedLine] : [];
+            }
+            
+            // 如果點到的是已啟動的框，則準備移動
+            if (activeTarget && isPointInPolygon(pos, jsonData.blocks[activeTarget.blockIndex].lines_coords[activeTarget.lineIndex].map(p=>({x:p[0], y:p[1]})))) {
+                 activeTransform.action = 'move';
+                 activeTransform.startPos = pos;
+                 activeTransform.originalPoints = JSON.parse(JSON.stringify(jsonData.blocks[activeTarget.blockIndex].lines_coords[activeTarget.lineIndex]));
+            }
+            
+            updateActionButtons();
+            drawVisualizations();
         }
 
         function handleMouseMove(e) {
             const pos = getMousePos(e);
-            if (mode === 'draw' && isDraggingRect) {
+            if (isDrawingMode && isDraggingRect) {
                 currentRect.w = pos.x - startDragPoint.x;
                 currentRect.h = pos.y - startDragPoint.y;
-            } else if (mode === 'transform' && activeTransform.action) {
+            } else if (activeTransform.action && activeTarget) {
                 const dx = pos.x - activeTransform.startPos.x;
                 const dy = pos.y - activeTransform.startPos.y;
-                const { blockIndex, lineIndex } = activeTransform.target;
+                const { blockIndex, lineIndex } = activeTarget;
                 let newPoints = activeTransform.originalPoints.map(p => [p[0], p[1]]);
 
                 if (activeTransform.action === 'move') {
@@ -336,26 +333,16 @@
                 } else if (activeTransform.action === 'move-edge') {
                     const p1Index = activeTransform.handleIndex - 4;
                     const p2Index = (p1Index + 1) % 4;
-                    
                     const p1 = activeTransform.originalPoints[p1Index];
                     const p2 = activeTransform.originalPoints[p2Index];
-
-                    // 計算邊的法向量
                     let edgeVec = { x: p2[0] - p1[0], y: p2[1] - p1[1] };
                     let normalVec = { x: -edgeVec.y, y: edgeVec.x };
                     const len = Math.hypot(normalVec.x, normalVec.y);
-                    if (len > 0) {
-                        normalVec.x /= len;
-                        normalVec.y /= len;
-                    }
-
-                    // 計算滑鼠移動在法向量上的投影距離
+                    if (len > 0) { normalVec.x /= len; normalVec.y /= len; }
                     const mouseMoveVec = { x: dx, y: dy };
                     const projection = mouseMoveVec.x * normalVec.x + mouseMoveVec.y * normalVec.y;
-
                     const moveX = projection * normalVec.x;
                     const moveY = projection * normalVec.y;
-
                     newPoints[p1Index] = [p1[0] + moveX, p1[1] + moveY];
                     newPoints[p2Index] = [p2[0] + moveX, p2[1] + moveY];
                 }
@@ -366,7 +353,7 @@
         }
 
         function handleMouseUp(e) {
-            if (mode === 'draw' && isDraggingRect) {
+            if (isDrawingMode && isDraggingRect) {
                 isDraggingRect = false;
                 const x1 = Math.min(startDragPoint.x, startDragPoint.x + currentRect.w);
                 const y1 = Math.min(startDragPoint.y, startDragPoint.y + currentRect.h);
@@ -381,9 +368,11 @@
                     }
                 }
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
-                setMode(null);
-            } else if (mode === 'transform' && activeTransform.action) {
-                recalculateBoxForBlock(jsonData.blocks[activeTransform.target.blockIndex]);
+                toggleDrawMode();
+            } else if (activeTransform.action) {
+                if (activeTarget) {
+                    recalculateBoxForBlock(jsonData.blocks[activeTarget.blockIndex]);
+                }
                 activeTransform.action = null;
                 activeTransform.handleIndex = -1;
                 drawVisualizations();
@@ -391,29 +380,23 @@
         }
         
         function handleMouseOut(e) {
-            if (mode === 'draw' && isDraggingRect) {
+            if (isDrawingMode && isDraggingRect) {
                 isDraggingRect = false;
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
                 drawVisualizations();
             }
-            if (mode === 'transform' && activeTransform.action) {
-                recalculateBoxForBlock(jsonData.blocks[activeTransform.target.blockIndex]);
+            if (activeTransform.action) {
+                if (activeTarget) {
+                    recalculateBoxForBlock(jsonData.blocks[activeTarget.blockIndex]);
+                }
                 activeTransform.action = null;
                 drawVisualizations();
             }
         }
 
-        function handleSelection(point) {
-            let lineClicked = findLineAt(point);
-            if (lineClicked) {
-                toggleLineSelection(lineClicked.blockIndex, lineClicked.lineIndex);
-            }
-            drawVisualizations();
-        }
-
         // --- 核心編輯邏輯 ---
         function addNewLine(text, polygon) {
-            const newBlock = { box: [], vertical: false, font_size: 20, lines_coords: [polygon], lines: [text] };
+            const newBlock = { box: [], vertical: true, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
@@ -508,6 +491,7 @@
         
         function resetSelectionAndRedraw() {
             selectedLines = [];
+            activeTarget = null;
             updateActionButtons();
             drawVisualizations();
         }
@@ -521,7 +505,7 @@
             a.href = url;
             a.download = 'modified_annotations.json';
             document.body.appendChild(a);
-            a.click();
+a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
@@ -547,12 +531,12 @@
 
                 if (block.lines_coords) {
                     block.lines_coords.forEach((linePolygon, lineIndex) => {
-                        const isSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
-                        const isActiveTransform = activeTransform.target && activeTransform.target.blockIndex === blockIndex && activeTransform.target.lineIndex === lineIndex;
+                        const isMultiSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
+                        const isActiveTarget = activeTarget && activeTarget.blockIndex === blockIndex && activeTarget.lineIndex === lineIndex;
                         
                         if (showLines) {
-                            ctx.strokeStyle = isSelected ? '#facc15' : (isActiveTransform ? '#ef4444' : '#3b82f6');
-                            ctx.lineWidth = (isSelected || isActiveTransform) ? 4 : 2;
+                            ctx.strokeStyle = isActiveTarget ? '#ef4444' : (isMultiSelected ? '#facc15' : '#3b82f6');
+                            ctx.lineWidth = (isActiveTarget || isMultiSelected) ? 4 : 2;
                             ctx.beginPath();
                             ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
                             for (let i = 1; i < linePolygon.length; i++) ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
@@ -560,19 +544,19 @@
                             ctx.stroke();
                         }
                         
-                        if (mode === 'transform' && isActiveTransform) {
+                        if (isActiveTarget) {
                             const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
                                 ctx.beginPath();
-                                if (handle.type === 'scale') { // 角點
+                                if (handle.type === 'scale') {
                                     ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
-                                    ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // 紅色
-                                } else if (handle.type === 'move-edge') { // 邊中點
+                                    ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+                                } else if (handle.type === 'move-edge') {
                                     ctx.rect(handle.x - HANDLE_RADIUS / 2, handle.y - HANDLE_RADIUS / 2, HANDLE_RADIUS, HANDLE_RADIUS);
-                                    ctx.fillStyle = 'rgba(59, 130, 246, 0.9)'; // 藍色
-                                } else { // 旋轉點
+                                    ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
+                                } else {
                                     ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
-                                    ctx.fillStyle = 'rgba(139, 92, 246, 0.9)'; // 紫色
+                                    ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
                                 }
                                 ctx.fill();
                             });
@@ -592,7 +576,7 @@
                 }
             });
             
-            if (mode === 'draw' && isDraggingRect) {
+            if (isDrawingMode && isDraggingRect) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
                 ctx.strokeStyle = '#f59e0b';
                 ctx.lineWidth = 2;
@@ -633,37 +617,21 @@
         }
 
         function getHandlesForLine(line) {
-            // 角點
             const handles = line.map(p => ({ x: p[0], y: p[1], type: 'scale' }));
-            
-            // 邊中點
             for (let i = 0; i < 4; i++) {
-                const p1 = line[i];
-                const p2 = line[(i + 1) % 4];
-                handles.push({
-                    x: (p1[0] + p2[0]) / 2,
-                    y: (p1[1] + p2[1]) / 2,
-                    type: 'move-edge'
-                });
+                const p1 = line[i]; const p2 = line[(i + 1) % 4];
+                handles.push({ x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2, type: 'move-edge' });
             }
-
-            // 旋轉點
             const topCenter = { x: (line[0][0] + line[1][0]) / 2, y: (line[0][1] + line[1][1]) / 2 };
             const center = getPolygonCenter(line);
             const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
-            const rotateHandle = {
-                x: topCenter.x + Math.cos(angle) * 25,
-                y: topCenter.y + Math.sin(angle) * 25,
-                type: 'rotate'
-            };
-            handles.push(rotateHandle);
+            handles.push({ x: topCenter.x + Math.cos(angle) * 25, y: topCenter.y + Math.sin(angle) * 25, type: 'rotate' });
             return handles;
         }
 
         function rotatePolygon(points, center, angle) {
             return points.map(p => {
-                const x = p[0] - center.x;
-                const y = p[1] - center.y;
+                const x = p[0] - center.x; const y = p[1] - center.y;
                 const newX = x * Math.cos(angle) - y * Math.sin(angle);
                 const newY = x * Math.sin(angle) + y * Math.cos(angle);
                 return [newX + center.x, newY + center.y];
