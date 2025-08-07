@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (精确定位文字)</title>
+    <title>JSON 標註互動式編輯工具 (字号逻辑最终修正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精确定位文字)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (字号逻辑最终修正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -229,7 +229,7 @@
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
         const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
         const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
-        const CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】、〝〟・。";
+        const CHARS_VERTICAL_COMPRESSION = "「」『』（）《》【】";
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -393,7 +393,7 @@
                 ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"],
                 ["（", "("], ["）", ")"], ["／", "！"],
                 ["〝", "“"], ["〟", "”"], ["：", "…"], ["；", "…"],
-                ["ＯＯ", "００"], ["、", "　"], ["……", "…"], ["…", "……"]
+                ["ＯＯ", "００"], ["、", "､"]
             ];
 
             let totalReplacements = 0;
@@ -1136,7 +1136,6 @@
             return fontSize;
         }
 
-        // *** 修改开始: 重构 drawTextInPolygon 以实现新的对齐逻辑 ***
         function drawTextInPolygon(text, polygon, isVertical, fontSize = 20, scaleFactor = 1) {
             const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
@@ -1156,10 +1155,10 @@
             ctx.lineWidth = 2 * scaleFactor;
             
             if (isVertical) {
-                ctx.textAlign = 'center'; // 非主轴：水平居中
+                ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
 
-                let currentY = -avgHeight / 2; // 主轴：从顶部开始
+                let currentY = -avgHeight / 2;
 
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
@@ -1191,8 +1190,8 @@
                     currentY += charHeight;
                 }
             } else { // Horizontal
-                ctx.textAlign = 'left'; // 主轴：从左边开始
-                ctx.textBaseline = 'middle'; // 非主轴：垂直居中
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
 
                 let currentX = -avgWidth / 2;
                 
@@ -1215,17 +1214,12 @@
             }
             ctx.restore();
         }
-        // *** 修改结束 ***
         
+        // *** 修改开始: 修正 calculateAutoFontSize 函数以匹配新的对齐逻辑 ***
         function calculateAutoFontSize(text, polygon, isVertical) {
             const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
-            const width1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-            const width2 = Math.hypot(p2[0] - p3[0], p2[1] - p3[1]);
-            const avgWidth = (width1 + width2) / 2;
-
-            const height1 = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
-            const height2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-            const avgHeight = (height1 + height2) / 2;
+            const avgWidth = (distance(p0, p1) + distance(p3, p2)) / 2;
+            const avgHeight = (distance(p0, p3) + distance(p1, p2)) / 2;
             
             if (!text || text.length === 0) return 20;
 
@@ -1235,16 +1229,19 @@
                     totalCharCountForHeight += (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) ? 0.5 : 1.0;
                 }
                 return totalCharCountForHeight > 0 ? (avgHeight / totalCharCountForHeight) : avgHeight;
-            } else {
-                let fontSize = avgHeight;
-                ctx.font = `${fontSize}px "Noto Sans JP", sans-serif`;
+            } else { // Horizontal
+                const tempFontSize = 100; // Use a temporary, large font size for accurate measurement ratio.
+                ctx.font = `${tempFontSize}px "Noto Sans JP", sans-serif`;
                 const measuredWidth = ctx.measureText(text).width;
-                if (measuredWidth > avgWidth && measuredWidth > 0) {
-                    fontSize = fontSize * (avgWidth / measuredWidth);
-                }
+
+                if (measuredWidth === 0) return avgHeight; // Fallback to height if text has no width
+
+                // Calculate the font size based on the ratio of available width to measured width.
+                const fontSize = tempFontSize * (avgWidth / measuredWidth);
                 return fontSize;
             }
         }
+        // *** 修改结束 ***
 
         // --- 幾何計算輔助函式 ---
         function isPointInPolygon(point, polygon) {
