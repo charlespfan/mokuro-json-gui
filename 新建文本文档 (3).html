@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (效能与容错修正)</title>
+    <title>JSON 標註互動式編輯工具 (导航功能已修正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (效能与容错修正)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (导航功能已修正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -103,6 +103,7 @@
                         <h3 class="text-lg font-semibold mb-4">預處理</h3>
                         <div id="preprocessPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="replaceBtn" class="btn btn-warning w-full">套用固定取代規則</button>
+                            <button id="batchAutoFontSizeBtn" class="btn btn-success w-full">所有页面自动字号</button>
                         </div>
                     </div>
 
@@ -178,6 +179,7 @@
         const showTextCheckbox = document.getElementById('showText');
         const preprocessPanel = document.getElementById('preprocessPanel');
         const replaceBtn = document.getElementById('replaceBtn');
+        const batchAutoFontSizeBtn = document.getElementById('batchAutoFontSizeBtn');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
@@ -235,6 +237,7 @@
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
         replaceBtn.addEventListener('click', applyFixedReplacements);
+        batchAutoFontSizeBtn.addEventListener('click', batchAutoSetFontSize);
 
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -272,7 +275,6 @@
             matchAndLoadFiles();
         }
 
-        // *** 修改开始: 修正文件匹配与预加载逻辑，增加容错性 ***
         async function matchAndLoadFiles() {
             if (!imageFiles || !jsonFiles) return;
 
@@ -334,8 +336,8 @@
             batchNav.classList.remove('hidden');
             batchNav.classList.add('flex');
         }
-        // *** 修改结束 ***
 
+        // *** 修改开始: 恢复 navigateFiles 函数 ***
         function navigateFiles(direction) {
             if (matchedFiles.length === 0) return;
             const newIndex = currentFileIndex + direction;
@@ -344,6 +346,7 @@
                 loadFile(currentFileIndex);
             }
         }
+        // *** 修改结束 ***
 
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
@@ -432,6 +435,42 @@
             }
             
             alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
+            drawVisualizations();
+        }
+
+        function batchAutoSetFontSize() {
+            if (!matchedFiles || matchedFiles.length === 0) {
+                alert("请先载入文件！");
+                return;
+            }
+
+            if (!confirm(`确定要为所有 ${matchedFiles.length} 个页面的所有区块自动设定字号吗？此操作不可撤销。`)) {
+                return;
+            }
+
+            let blocksProcessed = 0;
+            matchedFiles.forEach(pair => {
+                const data = pair.data;
+                if (data && data.blocks) {
+                    data.blocks.forEach(block => {
+                        if (!block.lines || block.lines.length === 0) return;
+
+                        let minFontSize = Infinity;
+                        block.lines.forEach((lineText, lineIndex) => {
+                            const polygon = block.lines_coords[lineIndex];
+                            const size = calculateAutoFontSize(lineText, polygon, block.vertical);
+                            if (size < minFontSize) {
+                                minFontSize = size;
+                            }
+                        });
+                        block.font_size = parseFloat(minFontSize.toFixed(2));
+                        blocksProcessed++;
+                    });
+                }
+            });
+
+            alert(`处理完成！共为 ${matchedFiles.length} 个页面的 ${blocksProcessed} 个区块自动设定了字号。`);
+            
             drawVisualizations();
         }
 
