@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (合并功能已修正)</title>
+    <title>JSON 標註互動式編輯工具 (精确拆分功能)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (合并功能已修正)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精确拆分功能)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -119,7 +119,7 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
                                 <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
-                                <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分 Block</button>
+                                <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分选中</button>
                                 <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -232,7 +232,7 @@
         fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
-        splitBtn.addEventListener('click', splitSelectedBlock);
+        splitBtn.addEventListener('click', splitSelectedLines); // *** 修改：绑定到新的拆分函数 ***
         editTextBtn.addEventListener('click', editSelectedLineText);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
@@ -645,27 +645,27 @@
             return firstBlockIndex;
         }
 
-        // --- *** 修改开始: 修正合并按钮的启用逻辑 *** ---
         function updateActionButtons() {
             const count = selectedLines.length;
             const selectedBlockIndex = getSelectedBlockIndex();
             const isSingleBlockSelected = selectedBlockIndex !== -1;
             const isSingleLineSelected = count === 1 && isSingleBlockSelected;
 
-            // 合并按钮: 只要选中数量大于1即可
             mergeBtn.disabled = count < 2;
             mergeBtn.textContent = `合併 (${count})`;
 
             deleteBtn.disabled = count < 1;
             deleteBtn.textContent = `刪除 (${count})`;
 
-            splitBtn.disabled = !isSingleLineSelected || (isSingleLineSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
+            // *** 修改：更新拆分按钮的逻辑 ***
+            splitBtn.disabled = !(count > 0 && isSingleBlockSelected);
+            splitBtn.textContent = `拆分选中 (${count})`;
+
             editTextBtn.disabled = !isSingleLineSelected;
             editPropBtn.disabled = !isSingleLineSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
         }
-        // --- *** 修改结束 *** ---
         
         function editSelectedLineText() {
             if (selectedLines.length !== 1) return;
@@ -749,22 +749,54 @@
             drawVisualizations();
         }
 
-        function splitSelectedBlock() {
-            if (selectedLines.length !== 1) return;
-            const { blockIndex } = selectedLines[0];
-            const blockToSplit = jsonData.blocks[blockIndex];
-            if (blockToSplit.lines.length < 2) return;
-            const newBlocks = blockToSplit.lines.map((lineText, lineIndex) => {
-                const newBlock = { ...blockToSplit, lines: [lineText], lines_coords: [blockToSplit.lines_coords[lineIndex]], box: [] };
-                recalculateBoxForBlock(newBlock);
-                return newBlock;
+        // --- *** 修改开始: 全新的拆分函数 *** ---
+        function splitSelectedLines() {
+            const selectedBlockIndex = getSelectedBlockIndex();
+            if (selectedBlockIndex === -1 || selectedLines.length === 0) {
+                alert("請選擇來自同一個區塊的一個或多個文字行進行拆分。");
+                return;
+            }
+
+            const originalBlock = jsonData.blocks[selectedBlockIndex];
+            const newBlocks = [];
+            
+            // 为了安全地从原数组中删除，先收集要移除的行的索引，并从大到小排序
+            const indicesToRemove = selectedLines.map(sel => sel.lineIndex).sort((a, b) => b - a);
+
+            // 从选中的行创建新的区块
+            indicesToRemove.forEach(lineIndex => {
+                const lineText = originalBlock.lines[lineIndex];
+                const lineCoords = originalBlock.lines_coords[lineIndex];
+                
+                const newBlock = {
+                    ...originalBlock, // 继承原区块的属性，如 vertical, font_size
+                    lines: [lineText],
+                    lines_coords: [lineCoords],
+                    box: [] // 稍后重新计算
+                };
+                recalculateBoxForBlock(newBlock); // 为新区块计算紧凑的外框
+                newBlocks.push(newBlock);
             });
-            jsonData.blocks.splice(blockIndex, 1, ...newBlocks);
+
+            // 从原区块中移除被选中的行
+            indicesToRemove.forEach(lineIndex => {
+                originalBlock.lines.splice(lineIndex, 1);
+                originalBlock.lines_coords.splice(lineIndex, 1);
+            });
+
+            // 如果原区块已经空了，就将其从数据中删除
+            if (originalBlock.lines.length === 0) {
+                jsonData.blocks.splice(selectedBlockIndex, 1);
+            }
+            
+            // 将新创建的区块添加到总数据中
+            jsonData.blocks.push(...newBlocks);
+
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
+        // --- *** 修改结束 *** ---
 
-        // --- *** 修改开始: 修正合并操作的逻辑 *** ---
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
 
@@ -774,12 +806,11 @@
                 block: jsonData.blocks[sel.blockIndex]
             }));
 
-            // 决定新区块的属性 (以第一个选中的line为基准)
             const baseBlock = linesToMerge[0].block;
             const fontSizes = linesToMerge.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) {
-                medianFontSize = 20; // Default
+                medianFontSize = 20;
             } else if (fontSizes.length % 2 === 0) {
                 const mid1 = fontSizes[fontSizes.length / 2 - 1];
                 const mid2 = fontSizes[fontSizes.length / 2];
@@ -796,18 +827,13 @@
                 box: []
             };
             
-            // 先删除所有选中的lines，但不重绘
             deleteSelectedLines(false); 
-            // 为新区块计算外框
             recalculateBoxForBlock(newBlock);
-            // 将新区块添加到jsonData中
             jsonData.blocks.push(newBlock);
 
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
-            // 最后重置选择并重绘
             resetSelectionAndRedraw();
         }
-        // --- *** 修改结束 *** ---
 
         function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
