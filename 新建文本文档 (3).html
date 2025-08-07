@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最终修正版)</title>
+    <title>JSON 標註互動式編輯工具 (新增矩形化与扶正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (最终修正版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (新增矩形化与扶正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -115,6 +115,12 @@
                                 <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
                                 <button id="fitBlockBtn" class="btn btn-info w-full" disabled>自適應外框</button>
                             </div>
+                            <!-- *** 修改开始: 新增矩形化和扶正按钮 *** -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="rectifyBtn" class="btn btn-warning w-full">矩形化</button>
+                                <button id="straightenBtn" class="btn btn-info w-full">扶正</button>
+                            </div>
+                            <!-- *** 修改结束 *** -->
                             <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
@@ -178,6 +184,8 @@
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
         const fitBlockBtn = document.getElementById('fitBlockBtn');
+        const rectifyBtn = document.getElementById('rectifyBtn'); // 新按钮
+        const straightenBtn = document.getElementById('straightenBtn'); // 新按钮
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -235,6 +243,8 @@
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
         fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
+        rectifyBtn.addEventListener('click', handleRectify); // 新按钮事件
+        straightenBtn.addEventListener('click', handleStraighten); // 新按钮事件
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedLines);
@@ -484,12 +494,10 @@
                     const handle = handles[i];
                     const radius = handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS;
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= radius) {
-                        // *** 修改开始: 确保只有在四角模式开启时才能拖动四角控制点 ***
                         if (handle.type === 'scale' && !isCornerEditMode) continue;
-                        // *** 修改结束 ***
 
                         activeTransform.action = handle.type;
-                        activeTransform.handleIndex = handle.pointIndex; // 使用 pointIndex
+                        activeTransform.handleIndex = handle.pointIndex;
                         activeTransform.startPos = pos;
                         activeTransform.originalPoints = JSON.parse(JSON.stringify(line));
                         activeTransform.center = getPolygonCenter(line);
@@ -884,6 +892,89 @@
             URL.revokeObjectURL(url);
         }
 
+        // --- *** 新增: 矩形化和扶正的核心函数 *** ---
+        function handleRectify() {
+            if (!jsonData) return;
+            const targets = getTargetLines();
+            targets.forEach(target => {
+                const { blockIndex, lineIndex } = target;
+                const originalPolygon = jsonData.blocks[blockIndex].lines_coords[lineIndex];
+                const newPolygon = rectifyPolygon(originalPolygon);
+                jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPolygon;
+            });
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
+            drawVisualizations();
+        }
+
+        function handleStraighten() {
+            if (!jsonData) return;
+            const targets = getTargetLines();
+            targets.forEach(target => {
+                const { blockIndex, lineIndex } = target;
+                const originalPolygon = jsonData.blocks[blockIndex].lines_coords[lineIndex];
+                const newPolygon = straightenPolygon(originalPolygon);
+                jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPolygon;
+            });
+            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
+            drawVisualizations();
+        }
+
+        function getTargetLines() {
+            const targets = [];
+            if (selectedLines.length > 0) {
+                targets.push(...selectedLines);
+            } else {
+                jsonData.blocks.forEach((block, blockIndex) => {
+                    block.lines_coords.forEach((_, lineIndex) => {
+                        targets.push({ blockIndex, lineIndex });
+                    });
+                });
+            }
+            return targets;
+        }
+
+        function distance(p1, p2) {
+            return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
+        }
+
+        function rectifyPolygon(polygon) {
+            const [p1, p2, p3, p4] = polygon;
+            const centerX = (p1[0] + p2[0] + p3[0] + p4[0]) / 4;
+            const centerY = (p1[1] + p2[1] + p3[1] + p4[1]) / 4;
+            const width = (distance(p1, p2) + distance(p4, p3)) / 2;
+            const height = (distance(p1, p4) + distance(p2, p3)) / 2;
+            const angle1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+            const angle2 = Math.atan2(p3[1] - p4[1], p3[0] - p4[0]);
+            const avgVecX = Math.cos(angle1) + Math.cos(angle2);
+            const avgVecY = Math.sin(angle1) + Math.sin(angle2);
+            const angle = Math.atan2(avgVecY, avgVecX);
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const hw = width / 2;
+            const hh = height / 2;
+            const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+            return corners.map(corner => {
+                const rotatedX = corner[0] * cosA - corner[1] * sinA;
+                const rotatedY = corner[0] * sinA + corner[1] * cosA;
+                return [centerX + rotatedX, centerY + rotatedY];
+            });
+        }
+
+        function straightenPolygon(polygon) {
+            const [p1, p2, p3, p4] = polygon;
+            const centerX = (p1[0] + p2[0] + p3[0] + p4[0]) / 4;
+            const centerY = (p1[1] + p2[1] + p3[1] + p4[1]) / 4;
+            const width = (distance(p1, p2) + distance(p4, p3)) / 2;
+            const height = (distance(p1, p4) + distance(p2, p3)) / 2;
+            const hw = width / 2;
+            const hh = height / 2;
+            return [
+                [centerX - hw, centerY - hh], [centerX + hw, centerY - hh],
+                [centerX + hw, centerY + hh], [centerX - hw, centerY + hh]
+            ];
+        }
+
+
         // --- 繪圖與輔助 ---
         function drawVisualizations() {
             if (!originalImage || !jsonData) return;
@@ -1123,22 +1214,18 @@
             return { x: x / polygon.length, y: y / polygon.length };
         }
 
-        // --- *** 修改开始: 修正 getHandlesForLine 函数 *** ---
         function getHandlesForLine(line) {
             const handles = [];
             
-            // 只有在四角编辑模式下才添加红色的缩放控制点
             if (isCornerEditMode) {
                 line.forEach((p, index) => handles.push({ x: p[0], y: p[1], type: 'scale', pointIndex: index }));
             }
             
-            // 蓝色的边缘控制点总是添加
             for (let i = 0; i < 4; i++) {
                 const p1 = line[i]; const p2 = line[(i + 1) % 4];
                 handles.push({ x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2, type: 'move-edge', pointIndex: i });
             }
 
-            // 紫色的旋转控制点总是添加
             const topCenter = { x: (line[0][0] + line[1][0]) / 2, y: (line[0][1] + line[1][1]) / 2 };
             const center = getPolygonCenter(line);
             const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
@@ -1146,7 +1233,6 @@
             
             return handles;
         }
-        // --- *** 修改结束 *** ---
 
         function getHandlesForBlock(box) {
             const [x1, y1, x2, y2] = box;
