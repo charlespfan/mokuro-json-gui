@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (精细化排版)</title>
+    <title>JSON 標註互動式編輯工具 (可调外框 - 已修正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精细化排版)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (可调外框 - 已修正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -111,7 +111,10 @@
                         <h3 class="text-lg font-semibold mb-4">編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
                             <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
-                            <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
+                                <button id="fitBlockBtn" class="btn btn-info w-full" disabled>自適應外框</button>
+                            </div>
                             <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
@@ -173,6 +176,7 @@
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
+        const fitBlockBtn = document.getElementById('fitBlockBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -203,20 +207,17 @@
             handleIndex: -1,
             startPos: {x: 0, y: 0},
             originalPoints: null,
+            originalBox: null,
             center: {x: 0, y: 0},
             startAngle: 0
         };
         const HANDLE_RADIUS = 8;
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
-        
-        // --- *** 修改開始：精细化排版 *** ---
-        // 1. 将需要特殊处理的字符分成两组，以便应用不同的偏移效果
-        // 2. 小写假名组：应用较小的偏移，使其稍微靠向右上角
-        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
-        // 3. 标点符号组：应用较大的偏移，使其更明确地位于右上角
-        const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
-        // --- *** 修改结束 *** ---
 
+        // --- 排版相關常數 ---
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
+        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
+        const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
+        const CHARS_VERTICAL_COMPRESSION = "「」『』（）《》【】";
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -228,6 +229,7 @@
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
+        fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedBlock);
@@ -449,7 +451,21 @@
                 return;
             }
 
-            // 變形邏輯
+            const selectedBlockIndex = getSelectedBlockIndex();
+            if (selectedBlockIndex !== -1) {
+                const block = jsonData.blocks[selectedBlockIndex];
+                const blockHandles = getHandlesForBlock(block.box);
+                for (const handle of blockHandles) {
+                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS) {
+                        activeTransform.action = 'scale-block';
+                        activeTransform.handleIndex = handle.index;
+                        activeTransform.startPos = pos;
+                        activeTransform.originalBox = [...block.box];
+                        return;
+                    }
+                }
+            }
+
             if (activeTarget) {
                 const { blockIndex, lineIndex } = activeTarget;
                 const line = jsonData.blocks[blockIndex].lines_coords[lineIndex];
@@ -471,19 +487,17 @@
                 }
             }
 
-            // 選取邏輯
             const clickedLine = findLineAt(pos);
-            if (e.shiftKey) { // 多選
+            if (e.shiftKey) {
                 if (clickedLine) {
                     toggleLineSelection(clickedLine.blockIndex, clickedLine.lineIndex);
-                    activeTarget = null; // 多選時取消單一啟動目標
+                    activeTarget = null;
                 }
-            } else { // 單選
+            } else {
                 activeTarget = clickedLine;
                 selectedLines = clickedLine ? [clickedLine] : [];
             }
             
-            // 如果點到的是已啟動的框，則準備移動
             if (activeTarget && isPointInPolygon(pos, jsonData.blocks[activeTarget.blockIndex].lines_coords[activeTarget.lineIndex].map(p=>({x:p[0], y:p[1]})))) {
                  activeTransform.action = 'move';
                  activeTransform.startPos = pos;
@@ -499,7 +513,38 @@
             if (isDrawingMode && isDraggingRect) {
                 currentRect.w = pos.x - startDragPoint.x;
                 currentRect.h = pos.y - startDragPoint.y;
-            } else if (activeTransform.action && activeTarget) {
+                drawVisualizations();
+                return;
+            }
+
+            if (activeTransform.action === 'scale-block') {
+                const selectedBlockIndex = getSelectedBlockIndex();
+                if (selectedBlockIndex === -1) return;
+
+                const block = jsonData.blocks[selectedBlockIndex];
+                const [orig_x1, orig_y1, orig_x2, orig_y2] = activeTransform.originalBox;
+                const dx = pos.x - activeTransform.startPos.x;
+                const dy = pos.y - activeTransform.startPos.y;
+
+                let [new_x1, new_y1, new_x2, new_y2] = [orig_x1, orig_y1, orig_x2, orig_y2];
+
+                switch (activeTransform.handleIndex) {
+                    case 0: new_x1 += dx; new_y1 += dy; break;
+                    case 1: new_x2 += dx; new_y1 += dy; break;
+                    case 2: new_x2 += dx; new_y2 += dy; break;
+                    case 3: new_x1 += dx; new_y2 += dy; break;
+                }
+                
+                block.box[0] = Math.min(new_x1, new_x2);
+                block.box[1] = Math.min(new_y1, new_y2);
+                block.box[2] = Math.max(new_x1, new_x2);
+                block.box[3] = Math.max(new_y1, new_y2);
+                
+                drawVisualizations();
+                return;
+            }
+
+            if (activeTransform.action && activeTarget) {
                 const dx = pos.x - activeTransform.startPos.x;
                 const dy = pos.y - activeTransform.startPos.y;
                 const { blockIndex, lineIndex } = activeTarget;
@@ -553,9 +598,6 @@
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
                 toggleDrawMode();
             } else if (activeTransform.action) {
-                if (activeTarget) {
-                    recalculateBoxForBlock(jsonData.blocks[activeTarget.blockIndex]);
-                }
                 activeTransform.action = null;
                 activeTransform.handleIndex = -1;
                 drawVisualizations();
@@ -569,9 +611,6 @@
                 drawVisualizations();
             }
             if (activeTransform.action) {
-                if (activeTarget) {
-                    recalculateBoxForBlock(jsonData.blocks[activeTarget.blockIndex]);
-                }
                 activeTransform.action = null;
                 drawVisualizations();
             }
@@ -595,16 +634,30 @@
             updateActionButtons();
         }
 
+        function getSelectedBlockIndex() {
+            if (selectedLines.length === 0) return -1;
+            const firstBlockIndex = selectedLines[0].blockIndex;
+            for (let i = 1; i < selectedLines.length; i++) {
+                if (selectedLines[i].blockIndex !== firstBlockIndex) {
+                    return -1;
+                }
+            }
+            return firstBlockIndex;
+        }
+
         function updateActionButtons() {
             const count = selectedLines.length;
-            const singleSelected = count === 1;
-            
-            mergeBtn.disabled = count < 2;
+            const selectedBlockIndex = getSelectedBlockIndex();
+            const isSingleBlockSelected = selectedBlockIndex !== -1;
+            const isSingleLineSelected = count === 1 && isSingleBlockSelected;
+
+            mergeBtn.disabled = !(isSingleBlockSelected && count > 1);
             deleteBtn.disabled = count < 1;
-            splitBtn.disabled = !singleSelected || (singleSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
-            editTextBtn.disabled = !singleSelected;
-            editPropBtn.disabled = !singleSelected;
-            editFontSizeBtn.disabled = !singleSelected;
+            splitBtn.disabled = !isSingleLineSelected || (isSingleLineSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
+            editTextBtn.disabled = !isSingleLineSelected;
+            editPropBtn.disabled = !isSingleLineSelected;
+            editFontSizeBtn.disabled = !isSingleLineSelected;
+            fitBlockBtn.disabled = !isSingleBlockSelected;
         }
         
         function editSelectedLineText() {
@@ -648,12 +701,21 @@
             }
         }
 
+        // --- *** 修改开始: 恢复“自动字号”的全体适用功能 *** ---
         function autoSetFontSize() {
             const targetBlockIndices = new Set();
+            // 如果没有选择任何 line，则目标为所有 block
             if (selectedLines.length === 0) {
                 jsonData.blocks.forEach((_, index) => targetBlockIndices.add(index));
             } else {
-                selectedLines.forEach(sel => targetBlockIndices.add(sel.blockIndex));
+                // 否则，目标为所选 line 所属的 block
+                const blockIndex = getSelectedBlockIndex();
+                if (blockIndex !== -1) {
+                    targetBlockIndices.add(blockIndex);
+                } else {
+                    alert("若要对特定区块应用自动字号，请确保所有选中的文字行都来自同一个区块。");
+                    return;
+                }
             }
 
             targetBlockIndices.forEach(blockIndex => {
@@ -670,8 +732,18 @@
                 });
                 block.font_size = parseFloat(minFontSize.toFixed(2));
             });
+
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
+        }
+        // --- *** 修改结束 *** ---
+
+        function fitSelectedBlockToLines() {
+            const blockIndex = getSelectedBlockIndex();
+            if (blockIndex === -1) return;
+            const block = jsonData.blocks[blockIndex];
+            recalculateBoxForBlock(block);
+            drawVisualizations();
         }
 
         function splitSelectedBlock() {
@@ -691,6 +763,12 @@
 
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
+            const blockIndex = getSelectedBlockIndex();
+            if (blockIndex === -1) {
+                alert("请确保所有要合并的文字行都来自同一个区块。");
+                return;
+            }
+
             const linesToMerge = selectedLines.map(sel => ({
                 coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
@@ -730,7 +808,6 @@
                 const block = jsonData.blocks[sel.blockIndex];
                 block.lines_coords.splice(sel.lineIndex, 1);
                 block.lines.splice(sel.lineIndex, 1);
-                recalculateBoxForBlock(block);
             });
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
@@ -771,10 +848,13 @@
             const showBlocks = showBlocksCheckbox.checked;
             const showLines = showLinesCheckbox.checked;
             const showText = showTextCheckbox.checked;
+            const selectedBlockIndex = getSelectedBlockIndex();
 
             jsonData.blocks.forEach((block, blockIndex) => {
+                const isBlockActive = (selectedBlockIndex === blockIndex);
                 if (showBlocks && block.box && block.box.length === 4) {
-                    ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4;
+                    ctx.strokeStyle = isBlockActive ? '#f59e0b' : '#22c55e';
+                    ctx.lineWidth = isBlockActive ? 4 : 2;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
@@ -783,6 +863,19 @@
                     const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
                     ctx.strokeText(labelContent, x1, y1 - 10);
                     ctx.fillText(labelContent, x1, y1 - 10);
+                    
+                    if (isBlockActive) {
+                        ctx.strokeStyle = '#f59e0b';
+                        ctx.lineWidth = 2;
+                        const blockHandles = getHandlesForBlock(block.box);
+                        blockHandles.forEach(handle => {
+                            ctx.beginPath();
+                            ctx.rect(handle.x - HANDLE_RADIUS / 2, handle.y - HANDLE_RADIUS / 2, HANDLE_RADIUS, HANDLE_RADIUS);
+                            ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
+                            ctx.fill();
+                            ctx.stroke();
+                        });
+                    }
                 }
 
                 if (block.lines_coords) {
@@ -839,6 +932,13 @@
             return (code >= 0x0020 && code <= 0x007E) || (code >= 0xFF61 && code <= 0xFF9F);
         }
 
+        function getCharVerticalHeight(char, fontSize) {
+            if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) {
+                return fontSize * 0.5;
+            }
+            return fontSize;
+        }
+
         function drawTextInPolygon(text, polygon, isVertical, fontSize = 20) {
             const p0 = polygon[0], p1 = polygon[1];
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
@@ -859,13 +959,13 @@
             if (isVertical) {
                 let totalTextHeight = 0;
                 for (const char of text) {
-                    totalTextHeight += isHalfWidth(char) ? fontSize * 0.5 : fontSize;
+                    totalTextHeight += getCharVerticalHeight(char, fontSize);
                 }
 
                 let currentY = -totalTextHeight / 2;
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
-                    const charHeight = isHalfWidth(char) ? fontSize * 0.5 : fontSize;
+                    const charHeight = getCharVerticalHeight(char, fontSize);
                     const charY = currentY + charHeight / 2;
                     
                     if (CHARS_TO_ROTATE.includes(char)) {
@@ -876,20 +976,16 @@
                         ctx.strokeText(char, 0, 0);
                         ctx.fillText(char, 0, 0);
                         ctx.restore();
-                    // --- *** 修改開始：精细化排版 *** ---
-                    // 4. 为标点符号应用一个较大的偏移，使其更靠右上角
                     } else if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
-                        const offsetX = fontSize * 0.4; // 较大的 X 轴偏移
-                        const offsetY = fontSize * 0.4; // 较大的 Y 轴偏移
+                        const offsetX = fontSize * 0.4;
+                        const offsetY = fontSize * 0.4;
                         ctx.strokeText(char, offsetX, charY - offsetY);
                         ctx.fillText(char, offsetX, charY - offsetY);
-                    // 5. 为小写假名应用一个较小的偏移
                     } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
-                        const offsetX = fontSize * 0.15; // 较小的 X 轴偏移
-                        const offsetY = fontSize * 0.15; // 较小的 Y 轴偏移
+                        const offsetX = fontSize * 0.15;
+                        const offsetY = fontSize * 0.15;
                         ctx.strokeText(char, offsetX, charY - offsetY);
                         ctx.fillText(char, offsetX, charY - offsetY);
-                    // --- *** 修改结束 *** ---
                     } else {
                         ctx.strokeText(char, 0, charY);
                         ctx.fillText(char, 0, charY);
@@ -933,7 +1029,11 @@
             if (!text || text.length === 0) return 20;
 
             if (isVertical) {
-                return (avgHeight / text.length);
+                let totalCharCountForHeight = 0;
+                for(const char of text) {
+                    totalCharCountForHeight += (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) ? 0.5 : 1.0;
+                }
+                return totalCharCountForHeight > 0 ? (avgHeight / totalCharCountForHeight) : avgHeight;
             } else {
                 let fontSize = avgHeight;
                 ctx.font = `${fontSize}px "Noto Sans JP", sans-serif`;
@@ -989,6 +1089,16 @@
             return handles;
         }
 
+        function getHandlesForBlock(box) {
+            const [x1, y1, x2, y2] = box;
+            return [
+                { x: x1, y: y1, index: 0 },
+                { x: x2, y: y1, index: 1 },
+                { x: x2, y: y2, index: 2 },
+                { x: x1, y: y2, index: 3 },
+            ];
+        }
+
         function rotatePolygon(points, center, angle) {
             return points.map(p => {
                 const x = p[0] - center.x; const y = p[1] - center.y;
@@ -999,7 +1109,10 @@
         }
         
         function recalculateBoxForBlock(block) {
-            if (!block || !block.lines_coords || block.lines_coords.length === 0) return;
+            if (!block || !block.lines_coords || block.lines_coords.length === 0) {
+                block.box = [0,0,0,0];
+                return;
+            };
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             block.lines_coords.forEach(poly => poly.forEach(p => {
                 minX = Math.min(minX, p[0]); minY = Math.min(minY, p[1]);
