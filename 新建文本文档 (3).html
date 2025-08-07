@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (动态控制点大小)</title>
+    <title>JSON 標註互動式編輯工具 (视觉元素动态缩放)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (动态控制点大小)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (视觉元素动态缩放)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -226,10 +226,10 @@
         const SCALE_HANDLE_RADIUS = 5;
 
         // --- 排版相關常數 ---
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
         const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
         const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
-        const CHARS_VERTICAL_COMPRESSION = "「」『』（）《》【】";
+        const CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】〝〟。、・";
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -392,7 +392,7 @@
                 ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"],
                 ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"],
                 ["（", "("], ["）", ")"], ["／", "！"],
-                ["〝", "“"], ["〟", "”"], ["：", "…"], ["；", "…"],
+                ["：", "…"], ["；", "…"],
                 ["ＯＯ", "００"], ["、", "､"]
             ];
 
@@ -507,19 +507,15 @@
                 return;
             }
 
-            // *** 修改开始: 在点击检测时也计算缩放比例 ***
             const rect = mainCanvas.getBoundingClientRect();
             const scaleFactor = mainCanvas.width / rect.width;
-            // *** 修改结束 ***
 
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex !== -1) {
                 const block = jsonData.blocks[selectedBlockIndex];
                 const blockHandles = getHandlesForBlock(block.box);
                 for (const handle of blockHandles) {
-                    // *** 修改开始: 使用动态半径进行点击判断 ***
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS * scaleFactor) {
-                    // *** 修改结束 ***
                         activeTransform.action = 'scale-block';
                         activeTransform.handleIndex = handle.index;
                         activeTransform.startPos = pos;
@@ -536,10 +532,8 @@
                 
                 for (let i = 0; i < handles.length; i++) {
                     const handle = handles[i];
-                    // *** 修改开始: 使用动态半径进行点击判断 ***
                     const radius = (handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS) * scaleFactor;
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= radius) {
-                    // *** 修改结束 ***
                         if (handle.type === 'scale' && !isCornerEditMode) continue;
 
                         activeTransform.action = handle.type;
@@ -1023,10 +1017,8 @@
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             ctx.drawImage(originalImage, 0, 0, mainCanvas.width, mainCanvas.height);
 
-            // *** 修改开始: 计算缩放比例 ***
             const rect = mainCanvas.getBoundingClientRect();
             const scaleFactor = mainCanvas.width / rect.width;
-            // *** 修改结束 ***
 
             const showBlocks = showBlocksCheckbox.checked;
             const showLines = showLinesCheckbox.checked;
@@ -1037,26 +1029,26 @@
                 const isBlockActive = (selectedBlockIndex === blockIndex);
                 if (showBlocks && block.box && block.box.length === 4) {
                     ctx.strokeStyle = isBlockActive ? '#f59e0b' : '#22c55e';
-                    ctx.lineWidth = isBlockActive ? 4 : 2;
+                    ctx.lineWidth = (isBlockActive ? 4 : 2) * scaleFactor;
                     const [x1, y1, x2, y2] = block.box;
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSizeLabel}px "Noto Sans JP", sans-serif`;
-                    ctx.fillStyle = 'white'; ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
+                    ctx.fillStyle = 'white'; 
+                    ctx.lineWidth = 3 * scaleFactor;
+                    ctx.strokeStyle = 'black';
                     const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
-                    ctx.strokeText(labelContent, x1, y1 - 10);
-                    ctx.fillText(labelContent, x1, y1 - 10);
+                    ctx.strokeText(labelContent, x1, y1 - (10 * scaleFactor));
+                    ctx.fillText(labelContent, x1, y1 - (10 * scaleFactor));
                     
                     if (isBlockActive) {
                         ctx.strokeStyle = '#f59e0b';
-                        ctx.lineWidth = 2;
+                        ctx.lineWidth = 2 * scaleFactor;
                         const blockHandles = getHandlesForBlock(block.box);
                         blockHandles.forEach(handle => {
                             ctx.beginPath();
-                            // *** 修改开始: 使用动态计算的大小 ***
                             const size = HANDLE_RADIUS * scaleFactor;
                             ctx.rect(handle.x - size / 2, handle.y - size / 2, size, size);
-                            // *** 修改结束 ***
                             ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
                             ctx.fill();
                             ctx.stroke();
@@ -1071,7 +1063,7 @@
                         
                         if (showLines) {
                             ctx.strokeStyle = isActiveTarget ? '#ef4444' : (isMultiSelected ? '#facc15' : '#3b82f6');
-                            ctx.lineWidth = (isActiveTarget || isMultiSelected) ? 4 : 2;
+                            ctx.lineWidth = ((isActiveTarget || isMultiSelected) ? 4 : 2) * scaleFactor;
                             ctx.beginPath();
                             ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
                             for (let i = 1; i < linePolygon.length; i++) ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
@@ -1080,14 +1072,13 @@
                         }
                         
                         if (showText) {
-                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size);
+                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size, scaleFactor);
                         }
 
                         if (isActiveTarget) {
                             const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
                                 ctx.beginPath();
-                                // *** 修改开始: 使用动态计算的半径 ***
                                 if (handle.type === 'scale') {
                                     ctx.arc(handle.x, handle.y, SCALE_HANDLE_RADIUS * scaleFactor, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
@@ -1099,7 +1090,6 @@
                                     ctx.arc(handle.x, handle.y, HANDLE_RADIUS * scaleFactor, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
                                 }
-                                // *** 修改结束 ***
                                 ctx.fill();
                             });
                         }
@@ -1110,7 +1100,7 @@
             if (isDrawingMode && isDraggingRect) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
                 ctx.strokeStyle = '#f59e0b';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2 * scaleFactor;
                 ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
                 ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
             }
@@ -1128,7 +1118,7 @@
             return fontSize;
         }
 
-        function drawTextInPolygon(text, polygon, isVertical, fontSize = 20) {
+        function drawTextInPolygon(text, polygon, isVertical, fontSize = 20, scaleFactor = 1) {
             const p0 = polygon[0], p1 = polygon[1];
             const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
             const center = getPolygonCenter(polygon);
@@ -1141,7 +1131,7 @@
             ctx.font = font;
             ctx.fillStyle = 'black';
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2 * scaleFactor;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
