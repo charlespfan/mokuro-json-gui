@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (视觉元素动态缩放)</title>
+    <title>JSON 標註互動式編輯工具 (中位数字号逻辑)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (视觉元素动态缩放)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (中位数字号逻辑)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -226,10 +226,10 @@
         const SCALE_HANDLE_RADIUS = 5;
 
         // --- 排版相關常數 ---
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
         const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
         const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
-        const CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】〝〟。、・";
+        const CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】、〝〟・。";
 
         // --- 事件監聽器 ---
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
@@ -392,8 +392,8 @@
                 ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"],
                 ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"],
                 ["（", "("], ["）", ")"], ["／", "！"],
-                ["：", "…"], ["；", "…"],
-                ["ＯＯ", "００"], ["、", "､"]
+                ["〝", "“"], ["〟", "”"], ["：", "…"], ["；", "…"],
+                ["ＯＯ", "００"], ["、", "　"], ["……", "…"], ["…", "……"]
             ];
 
             let totalReplacements = 0;
@@ -436,6 +436,7 @@
             drawVisualizations();
         }
 
+        // *** 修改开始: 自动字号批处理函数也使用中位数逻辑 ***
         function batchAutoSetFontSize() {
             if (!matchedFiles || matchedFiles.length === 0) {
                 alert("请先载入文件！");
@@ -453,16 +454,25 @@
                     data.blocks.forEach(block => {
                         if (!block.lines || block.lines.length === 0) return;
 
-                        let minFontSize = Infinity;
+                        const fontSizes = [];
                         block.lines.forEach((lineText, lineIndex) => {
                             const polygon = block.lines_coords[lineIndex];
                             const size = calculateAutoFontSize(lineText, polygon, block.vertical);
-                            if (size < minFontSize) {
-                                minFontSize = size;
-                            }
+                            fontSizes.push(size);
                         });
-                        block.font_size = parseFloat(minFontSize.toFixed(2));
-                        blocksProcessed++;
+
+                        if (fontSizes.length > 0) {
+                            fontSizes.sort((a, b) => a - b);
+                            const mid = Math.floor(fontSizes.length / 2);
+                            let medianFontSize;
+                            if (fontSizes.length % 2 === 0) {
+                                medianFontSize = (fontSizes[mid - 1] + fontSizes[mid]) / 2;
+                            } else {
+                                medianFontSize = fontSizes[mid];
+                            }
+                            block.font_size = parseFloat(medianFontSize.toFixed(2));
+                            blocksProcessed++;
+                        }
                     });
                 }
             });
@@ -471,6 +481,7 @@
             
             drawVisualizations();
         }
+        // *** 修改结束 ***
 
         // --- 編輯模式切換 ---
         function toggleDrawMode() {
@@ -774,6 +785,7 @@
             }
         }
 
+        // *** 修改开始: 自动字号函数使用中位数逻辑 ***
         function autoSetFontSize() {
             const targetBlockIndices = new Set();
             if (selectedLines.length === 0) {
@@ -792,19 +804,29 @@
                 const block = jsonData.blocks[blockIndex];
                 if (!block.lines || block.lines.length === 0) return;
 
-                let minFontSize = Infinity;
+                const fontSizes = [];
                 block.lines.forEach((lineText, lineIndex) => {
                     const polygon = block.lines_coords[lineIndex];
                     const size = calculateAutoFontSize(lineText, polygon, block.vertical);
-                    if (size < minFontSize) {
-                        minFontSize = size;
-                    }
+                    fontSizes.push(size);
                 });
-                block.font_size = parseFloat(minFontSize.toFixed(2));
+
+                if (fontSizes.length > 0) {
+                    fontSizes.sort((a, b) => a - b);
+                    const mid = Math.floor(fontSizes.length / 2);
+                    let medianFontSize;
+                    if (fontSizes.length % 2 === 0) { // Even number of lines
+                        medianFontSize = (fontSizes[mid - 1] + fontSizes[mid]) / 2;
+                    } else { // Odd number of lines
+                        medianFontSize = fontSizes[mid];
+                    }
+                    block.font_size = parseFloat(medianFontSize.toFixed(2));
+                }
             });
 
             resetSelectionAndRedraw();
         }
+        // *** 修改结束 ***
 
         function fitSelectedBlockToLines() {
             const blockIndex = getSelectedBlockIndex();
