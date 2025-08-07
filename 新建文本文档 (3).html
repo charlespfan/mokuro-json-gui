@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (可调外框 - 已修正)</title>
+    <title>JSON 標註互動式編輯工具 (合并功能已修正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (可调外框 - 已修正)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (合并功能已修正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -645,20 +645,27 @@
             return firstBlockIndex;
         }
 
+        // --- *** 修改开始: 修正合并按钮的启用逻辑 *** ---
         function updateActionButtons() {
             const count = selectedLines.length;
             const selectedBlockIndex = getSelectedBlockIndex();
             const isSingleBlockSelected = selectedBlockIndex !== -1;
             const isSingleLineSelected = count === 1 && isSingleBlockSelected;
 
-            mergeBtn.disabled = !(isSingleBlockSelected && count > 1);
+            // 合并按钮: 只要选中数量大于1即可
+            mergeBtn.disabled = count < 2;
+            mergeBtn.textContent = `合併 (${count})`;
+
             deleteBtn.disabled = count < 1;
+            deleteBtn.textContent = `刪除 (${count})`;
+
             splitBtn.disabled = !isSingleLineSelected || (isSingleLineSelected && jsonData.blocks[selectedLines[0].blockIndex].lines.length < 2);
             editTextBtn.disabled = !isSingleLineSelected;
             editPropBtn.disabled = !isSingleLineSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
         }
+        // --- *** 修改结束 *** ---
         
         function editSelectedLineText() {
             if (selectedLines.length !== 1) return;
@@ -701,14 +708,11 @@
             }
         }
 
-        // --- *** 修改开始: 恢复“自动字号”的全体适用功能 *** ---
         function autoSetFontSize() {
             const targetBlockIndices = new Set();
-            // 如果没有选择任何 line，则目标为所有 block
             if (selectedLines.length === 0) {
                 jsonData.blocks.forEach((_, index) => targetBlockIndices.add(index));
             } else {
-                // 否则，目标为所选 line 所属的 block
                 const blockIndex = getSelectedBlockIndex();
                 if (blockIndex !== -1) {
                     targetBlockIndices.add(blockIndex);
@@ -736,7 +740,6 @@
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
-        // --- *** 修改结束 *** ---
 
         function fitSelectedBlockToLines() {
             const blockIndex = getSelectedBlockIndex();
@@ -761,13 +764,9 @@
             resetSelectionAndRedraw();
         }
 
+        // --- *** 修改开始: 修正合并操作的逻辑 *** ---
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
-            const blockIndex = getSelectedBlockIndex();
-            if (blockIndex === -1) {
-                alert("请确保所有要合并的文字行都来自同一个区块。");
-                return;
-            }
 
             const linesToMerge = selectedLines.map(sel => ({
                 coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
@@ -775,6 +774,8 @@
                 block: jsonData.blocks[sel.blockIndex]
             }));
 
+            // 决定新区块的属性 (以第一个选中的line为基准)
+            const baseBlock = linesToMerge[0].block;
             const fontSizes = linesToMerge.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) {
@@ -791,15 +792,22 @@
                 lines_coords: linesToMerge.map(l => l.coord),
                 lines: linesToMerge.map(l => l.text),
                 font_size: parseFloat(medianFontSize.toFixed(2)),
-                vertical: linesToMerge[0].block.vertical,
+                vertical: baseBlock.vertical,
                 box: []
             };
-            deleteSelectedLines(false);
+            
+            // 先删除所有选中的lines，但不重绘
+            deleteSelectedLines(false); 
+            // 为新区块计算外框
             recalculateBoxForBlock(newBlock);
+            // 将新区块添加到jsonData中
             jsonData.blocks.push(newBlock);
+
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
+            // 最后重置选择并重绘
             resetSelectionAndRedraw();
         }
+        // --- *** 修改结束 *** ---
 
         function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
