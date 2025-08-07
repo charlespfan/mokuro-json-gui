@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (新增矩形化与扶正)</title>
+    <title>JSON 標註互動式編輯工具 (效能与容错修正)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (新增矩形化与扶正)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (效能与容错修正)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -115,12 +115,10 @@
                                 <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
                                 <button id="fitBlockBtn" class="btn btn-info w-full" disabled>自適應外框</button>
                             </div>
-                            <!-- *** 修改开始: 新增矩形化和扶正按钮 *** -->
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="rectifyBtn" class="btn btn-warning w-full">矩形化</button>
                                 <button id="straightenBtn" class="btn btn-info w-full">扶正</button>
                             </div>
-                            <!-- *** 修改结束 *** -->
                             <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
@@ -184,8 +182,8 @@
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
         const fitBlockBtn = document.getElementById('fitBlockBtn');
-        const rectifyBtn = document.getElementById('rectifyBtn'); // 新按钮
-        const straightenBtn = document.getElementById('straightenBtn'); // 新按钮
+        const rectifyBtn = document.getElementById('rectifyBtn');
+        const straightenBtn = document.getElementById('straightenBtn');
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
@@ -203,7 +201,6 @@
 
         let originalImage = null;
         let jsonData = null;
-        let originalJsonFilename = 'annotations.json';
         let isDrawingMode = false;
         let isCornerEditMode = false;
         let selectedLines = []; 
@@ -243,8 +240,8 @@
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
         fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
-        rectifyBtn.addEventListener('click', handleRectify); // 新按钮事件
-        straightenBtn.addEventListener('click', handleStraighten); // 新按钮事件
+        rectifyBtn.addEventListener('click', handleRectify);
+        straightenBtn.addEventListener('click', handleStraighten);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedLines);
@@ -272,37 +269,72 @@
                 jsonFolderStatus.textContent = `已選擇 ${files.length} 個 JSON 檔案`;
                 jsonFolderStatus.classList.add('text-green-400');
             }
-            matchFiles();
+            matchAndLoadFiles();
         }
 
-        function matchFiles() {
+        // *** 修改开始: 修正文件匹配与预加载逻辑，增加容错性 ***
+        async function matchAndLoadFiles() {
             if (!imageFiles || !jsonFiles) return;
 
+            jsonFolderStatus.textContent = '正在解析 JSON 檔案...';
+            jsonFolderStatus.classList.remove('text-green-400', 'text-red-400');
+            
             const jsonMap = new Map();
             jsonFiles.forEach(file => {
                 const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
                 jsonMap.set(baseName, file);
             });
 
-            matchedFiles = [];
+            const tempMatches = [];
             imageFiles.forEach(imgFile => {
                 const baseName = imgFile.name.substring(0, imgFile.name.lastIndexOf('.'));
                 if (jsonMap.has(baseName)) {
-                    matchedFiles.push({ image: imgFile, json: jsonMap.get(baseName), modifiedJsonData: null });
+                    tempMatches.push({ image: imgFile, json: jsonMap.get(baseName) });
                 }
             });
-            
-            matchedFiles.sort((a, b) => a.image.name.localeCompare(b.image.name));
 
-            if (matchedFiles.length > 0) {
-                currentFileIndex = 0;
-                loadFile(currentFileIndex);
-                batchNav.classList.remove('hidden');
-                batchNav.classList.add('flex');
-            } else {
+            if (tempMatches.length === 0) {
                 alert("未找到任何匹配的圖片與 JSON 檔案！請確保檔名（不含副檔名）一致。");
+                jsonFolderStatus.textContent = `已選擇 ${jsonFiles.length} 個 JSON 檔案`;
+                return;
             }
+
+            const successfulMatches = [];
+            for (const pair of tempMatches) {
+                try {
+                    const jsonText = await pair.json.text();
+                    const data = JSON.parse(jsonText);
+                    successfulMatches.push({
+                        image: pair.image,
+                        jsonName: pair.json.name,
+                        data: data
+                    });
+                } catch (error) {
+                    console.warn(`檔案解析失敗，已跳過: ${pair.json.name}. 错误:`, error);
+                }
+            }
+
+            if (successfulMatches.length === 0) {
+                alert("所有匹配的 JSON 檔案都解析失敗！請按 F12 查看控制台以获取详细错误信息。");
+                jsonFolderStatus.textContent = "所有檔案解析失敗";
+                jsonFolderStatus.classList.add('text-red-400');
+                return;
+            }
+
+            matchedFiles = successfulMatches.sort((a, b) => a.image.name.localeCompare(b.image.name));
+            const successMessage = `成功解析 ${matchedFiles.length} / ${tempMatches.length} 個 JSON 檔案`;
+            jsonFolderStatus.textContent = successMessage;
+            jsonFolderStatus.classList.add('text-green-400');
+            if (matchedFiles.length < tempMatches.length) {
+                alert(successMessage + "。部分檔案解析失敗，請按 F12 查看控制台以获取详细信息。");
+            }
+
+            currentFileIndex = 0;
+            loadFile(currentFileIndex);
+            batchNav.classList.remove('hidden');
+            batchNav.classList.add('flex');
         }
+        // *** 修改结束 ***
 
         function navigateFiles(direction) {
             if (matchedFiles.length === 0) return;
@@ -316,38 +348,22 @@
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             
-            const imagePromise = new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    originalImage = new Image();
-                    originalImage.onload = () => resolve();
-                    originalImage.onerror = reject;
-                    originalImage.src = event.target.result;
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(currentPair.image);
-            });
-
-            if (currentPair.modifiedJsonData) {
-                jsonData = currentPair.modifiedJsonData;
-                originalJsonFilename = currentPair.json.name;
-            } else {
-                await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        try {
-                            jsonData = JSON.parse(event.target.result);
-                            originalJsonFilename = currentPair.json.name;
-                            resolve();
-                        } catch (e) { reject(e); }
-                    };
-                    reader.onerror = reject;
-                    reader.readAsText(currentPair.json);
-                });
-            }
+            jsonData = currentPair.data;
 
             try {
-                await imagePromise;
+                const imageSrc = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(currentPair.image);
+                });
+
+                originalImage = new Image();
+                await new Promise((resolve, reject) => {
+                    originalImage.onload = resolve;
+                    originalImage.onerror = reject;
+                    originalImage.src = imageSrc;
+                });
                 
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
                 preprocessPanel.classList.remove('opacity-50', 'pointer-events-none');
@@ -358,14 +374,14 @@
 
                 resetSelectionAndRedraw();
             } catch (error) {
-                console.error("Error loading file pair:", error);
-                alert(`載入檔案 ${currentPair.image.name} 或 ${currentPair.json.name} 時出錯。`);
+                console.error("Error loading image file:", error);
+                alert(`載入圖片檔案 ${currentPair.image.name} 時出錯。`);
             }
         }
 
 
         // --- 預處理 ---
-        async function applyFixedReplacements() {
+        function applyFixedReplacements() {
             if (!jsonData) return;
 
             const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
@@ -399,35 +415,19 @@
                 return count;
             };
 
-            if (scope) { // 處理所有檔案
-                for (let i = 0; i < matchedFiles.length; i++) {
-                    const pair = matchedFiles[i];
-                    let dataToProcess;
-                    if (pair.modifiedJsonData) {
-                        dataToProcess = pair.modifiedJsonData;
-                    } else {
-                        const jsonText = await pair.json.text();
-                        dataToProcess = JSON.parse(jsonText);
-                    }
-                    
-                    const replacementsCount = processJson(dataToProcess);
+            if (scope) {
+                matchedFiles.forEach(pair => {
+                    const replacementsCount = processJson(pair.data);
                     if (replacementsCount > 0) {
-                        pair.modifiedJsonData = dataToProcess;
                         totalReplacements += replacementsCount;
                         filesAffected++;
                     }
-                }
-                if (matchedFiles[currentFileIndex].modifiedJsonData) {
-                    jsonData = matchedFiles[currentFileIndex].modifiedJsonData;
-                }
-            } else { // 僅處理當前檔案
+                });
+            } else {
                 const replacementsCount = processJson(jsonData);
                 if (replacementsCount > 0) {
                     totalReplacements = replacementsCount;
                     filesAffected = 1;
-                    if (matchedFiles.length > 0) {
-                        matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
-                    }
                 }
             }
             
@@ -643,7 +643,6 @@
             const newBlock = { box: [], vertical: true, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
         }
 
         function toggleLineSelection(blockIndex, lineIndex) {
@@ -700,7 +699,6 @@
             const newText = prompt("請輸入新的文字內容:", jsonData.blocks[blockIndex].lines[lineIndex]);
             if (newText !== null) {
                 jsonData.blocks[blockIndex].lines[lineIndex] = newText;
-                if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                 resetSelectionAndRedraw();
             }
         }
@@ -713,7 +711,6 @@
             const newStatus = block.vertical ? "橫排" : "豎排";
             if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
                 block.vertical = !block.vertical;
-                if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                 resetSelectionAndRedraw();
             }
         }
@@ -727,7 +724,6 @@
                 const parsedSize = parseFloat(newSize);
                 if (!isNaN(parsedSize) && parsedSize > 0) {
                     block.font_size = parsedSize;
-                    if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
                     resetSelectionAndRedraw();
                 } else {
                     alert("請輸入有效的數字！");
@@ -764,7 +760,6 @@
                 block.font_size = parseFloat(minFontSize.toFixed(2));
             });
 
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -813,7 +808,6 @@
             
             jsonData.blocks.push(...newBlocks);
 
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -851,7 +845,6 @@
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
 
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
 
@@ -864,7 +857,6 @@
                 block.lines.splice(sel.lineIndex, 1);
             });
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             if (redraw) resetSelectionAndRedraw();
         }
         
@@ -878,13 +870,14 @@
 
         function exportJson() {
             if (!jsonData) { alert("沒有可匯出的資料！"); return; }
-            const jsonString = JSON.stringify(jsonData, null, 2);
+            const dataToExport = matchedFiles[currentFileIndex].data;
+            const jsonString = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             
             a.href = url;
-            a.download = originalJsonFilename;
+            a.download = matchedFiles[currentFileIndex].jsonName;
             
             document.body.appendChild(a);
             a.click();
@@ -892,7 +885,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // --- *** 新增: 矩形化和扶正的核心函数 *** ---
+        // --- 矩形化和扶正的核心函数 ---
         function handleRectify() {
             if (!jsonData) return;
             const targets = getTargetLines();
@@ -902,7 +895,6 @@
                 const newPolygon = rectifyPolygon(originalPolygon);
                 jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPolygon;
             });
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             drawVisualizations();
         }
 
@@ -915,7 +907,6 @@
                 const newPolygon = straightenPolygon(originalPolygon);
                 jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPolygon;
             });
-            if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             drawVisualizations();
         }
 
