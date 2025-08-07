@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (四角编辑模式)</title>
+    <title>JSON 標註互動式編輯工具 (最终修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (四角编辑模式)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (最终修正版)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -122,13 +122,11 @@
                                 <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分选中</button>
                                 <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
                             </div>
-                            <!-- *** 修改开始: 重新布局并新增 "改变四角" 按钮 *** -->
                             <div class="grid grid-cols-3 gap-2">
                                 <button id="editPropBtn" class="btn btn-purple w-full" disabled>改屬性</button>
                                 <button id="editFontSizeBtn" class="btn btn-purple w-full" disabled>改字號</button>
                                 <button id="changeCornersBtn" class="btn btn-purple w-full" disabled>改变四角</button>
                             </div>
-                            <!-- *** 修改结束 *** -->
                         </div>
                     </div>
 
@@ -186,7 +184,7 @@
         const editTextBtn = document.getElementById('editTextBtn');
         const editPropBtn = document.getElementById('editPropBtn');
         const editFontSizeBtn = document.getElementById('editFontSizeBtn');
-        const changeCornersBtn = document.getElementById('changeCornersBtn'); // 新按钮
+        const changeCornersBtn = document.getElementById('changeCornersBtn');
         const exportBtn = document.getElementById('exportBtn');
 
         // 應用程式狀態
@@ -199,7 +197,7 @@
         let jsonData = null;
         let originalJsonFilename = 'annotations.json';
         let isDrawingMode = false;
-        let isCornerEditMode = false; // 新状态: 是否处于四角编辑模式
+        let isCornerEditMode = false;
         let selectedLines = []; 
         let activeTarget = null;
         
@@ -243,7 +241,7 @@
         editTextBtn.addEventListener('click', editSelectedLineText);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
-        changeCornersBtn.addEventListener('click', toggleCornerEditMode); // 新按钮事件
+        changeCornersBtn.addEventListener('click', toggleCornerEditMode);
         exportBtn.addEventListener('click', exportJson);
         
         mainCanvas.addEventListener('mousedown', handleMouseDown);
@@ -439,7 +437,6 @@
             }
         }
         
-        // *** 新增: 四角编辑模式切换函数 ***
         function toggleCornerEditMode() {
             isCornerEditMode = !isCornerEditMode;
             changeCornersBtn.classList.toggle('active', isCornerEditMode);
@@ -487,8 +484,12 @@
                     const handle = handles[i];
                     const radius = handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS;
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= radius) {
+                        // *** 修改开始: 确保只有在四角模式开启时才能拖动四角控制点 ***
+                        if (handle.type === 'scale' && !isCornerEditMode) continue;
+                        // *** 修改结束 ***
+
                         activeTransform.action = handle.type;
-                        activeTransform.handleIndex = i;
+                        activeTransform.handleIndex = handle.pointIndex; // 使用 pointIndex
                         activeTransform.startPos = pos;
                         activeTransform.originalPoints = JSON.parse(JSON.stringify(line));
                         activeTransform.center = getPolygonCenter(line);
@@ -572,7 +573,7 @@
                 } else if (activeTransform.action === 'scale') {
                     newPoints[activeTransform.handleIndex] = [pos.x, pos.y];
                 } else if (activeTransform.action === 'move-edge') {
-                    const p1Index = activeTransform.handleIndex - 4;
+                    const p1Index = activeTransform.handleIndex;
                     const p2Index = (p1Index + 1) % 4;
                     const p1 = activeTransform.originalPoints[p1Index];
                     const p2 = activeTransform.originalPoints[p2Index];
@@ -678,9 +679,7 @@
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
             
-            // *** 新增: "改变四角" 按钮的逻辑 ***
             changeCornersBtn.disabled = !isSingleLineSelected;
-            // 如果按钮被禁用，确保取消其激活状态并重置模式
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
                 changeCornersBtn.classList.remove('active');
@@ -864,7 +863,6 @@
         function resetSelectionAndRedraw() {
             selectedLines = [];
             activeTarget = null;
-            // *** 新增: 重置时确保关闭四角编辑模式 ***
             isCornerEditMode = false; 
             updateActionButtons();
             drawVisualizations();
@@ -947,7 +945,7 @@
                         }
 
                         if (isActiveTarget) {
-                            const handles = getHandlesForLine(line);
+                            const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
                                 ctx.beginPath();
                                 if (handle.type === 'scale') {
@@ -1125,26 +1123,30 @@
             return { x: x / polygon.length, y: y / polygon.length };
         }
 
-        // --- *** 修改: getHandlesForLine 现在会检查 isCornerEditMode *** ---
+        // --- *** 修改开始: 修正 getHandlesForLine 函数 *** ---
         function getHandlesForLine(line) {
             const handles = [];
             
-            // 只有在四角编辑模式下才添加缩放控制点
+            // 只有在四角编辑模式下才添加红色的缩放控制点
             if (isCornerEditMode) {
-                line.forEach(p => handles.push({ x: p[0], y: p[1], type: 'scale' }));
+                line.forEach((p, index) => handles.push({ x: p[0], y: p[1], type: 'scale', pointIndex: index }));
             }
             
-            // 边缘和旋转控制点总是添加
+            // 蓝色的边缘控制点总是添加
             for (let i = 0; i < 4; i++) {
                 const p1 = line[i]; const p2 = line[(i + 1) % 4];
-                handles.push({ x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2, type: 'move-edge' });
+                handles.push({ x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2, type: 'move-edge', pointIndex: i });
             }
+
+            // 紫色的旋转控制点总是添加
             const topCenter = { x: (line[0][0] + line[1][0]) / 2, y: (line[0][1] + line[1][1]) / 2 };
             const center = getPolygonCenter(line);
             const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
-            handles.push({ x: topCenter.x + Math.cos(angle) * 25, y: topCenter.y + Math.sin(angle) * 25, type: 'rotate' });
+            handles.push({ x: topCenter.x + Math.cos(angle) * 25, y: topCenter.y + Math.sin(angle) * 25, type: 'rotate', pointIndex: -1 });
+            
             return handles;
         }
+        // --- *** 修改结束 *** ---
 
         function getHandlesForBlock(box) {
             const [x1, y1, x2, y2] = box;
