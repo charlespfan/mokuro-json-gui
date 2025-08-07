@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (视觉元素动态缩放)</title>
+    <title>JSON 標註互動式編輯工具 (頂部響應式工具列)</title>
+    <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
@@ -23,13 +25,14 @@
         }
         .btn {
             display: inline-block;
-            padding: 0.75rem 1.5rem;
+            padding: 0.5rem 1rem; /* 稍微減小按鈕 padding 以適應工具列 */
             border-radius: 0.5rem;
             font-weight: 600;
             transition: all 0.3s;
             cursor: pointer;
             text-align: center;
             border: 1px solid transparent;
+            white-space: nowrap; /* 防止按鈕文字換行 */
         }
         .btn-primary { background-color: #3b82f6; color: white; }
         .btn-primary:hover { background-color: #2563eb; }
@@ -63,115 +66,146 @@
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
 
         /* --- 新增和修改的樣式 --- */
-        #main-container {
-            position: relative; /* 作為懸浮面板的定位基準 */
+        #top-toolbar {
+            position: fixed; /* 固定在視窗頂部 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000; /* 確保在最上層 */
+            display: flex;
+            flex-wrap: wrap; /* 允許內部元素換行 */
+            justify-content: center; /* 水平居中 */
+            align-items: flex-start; /* 頂部對齊 */
+            gap: 1rem; /* 控制項之間的間距 */
+            padding: 1rem;
+            background-color: rgba(17, 24, 39, 0.9); /* 帶透明和模糊效果的背景 */
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #374151;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            transition: height 0.2s;
         }
-        #control-panel-container {
-            position: absolute; /* 設定為絕對定位 */
-            top: 1rem;          /* 距離頂部 1rem */
-            left: 1rem;         /* 距離左側 1rem */
-            width: 380px;       /* 固定寬度 */
-            z-index: 10;        /* 確保在 Canvas 之上 */
-            max-height: calc(100vh - 4rem); /* 限制最大高度，避免超出視窗 */
-            overflow-y: auto;   /* 如果內容過多則顯示滾動條 */
-            background-color: rgba(31, 41, 55, 0.85); /* 半透明背景，增加懸浮感 */
-            backdrop-filter: blur(8px); /* 模糊背景 (毛玻璃效果) */
-            border-radius: 0.75rem;
+
+        .control-section {
+            display: flex;
+            flex-direction: column; /* 內部元素垂直排列 */
+            gap: 0.75rem; /* 區塊內元素的間距 */
+            padding: 1rem;
+            background-color: #1f2937;
             border: 1px solid #374151;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+            border-radius: 0.75rem;
+        }
+
+        .control-section h3 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #9ca3af;
+        }
+
+        main {
+            transition: padding-top 0.2s ease-out; /* 平滑過渡效果 */
         }
     </style>
 </head>
 <body class="p-4 md:p-8">
-    <div class="max-w-full mx-auto">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (视觉元素动态缩放)</h1>
-            <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
-        </header>
 
-        <div id="main-container">
-            <div class="card">
-                 <canvas id="mainCanvas"></canvas>
+    <!-- 頂部固定工具列 -->
+    <div id="top-toolbar">
+        <!-- 檔案選擇區塊 -->
+        <div class="control-section">
+            <h3 class="text-lg">1. 載入檔案</h3>
+            <div class="flex gap-4">
+                <div>
+                    <label for="imageFolderInput" class="btn btn-primary w-full">選擇圖片資料夾</label>
+                    <input type="file" id="imageFolderInput" class="hidden" webkitdirectory directory multiple>
+                    <p id="imageFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
+                </div>
+                <div>
+                    <label for="jsonFolderInput" class="btn btn-primary w-full">選擇 JSON 資料夾</label>
+                    <input type="file" id="jsonFolderInput" class="hidden" webkitdirectory directory multiple>
+                    <p id="jsonFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
+                </div>
             </div>
+            <div id="batch-nav" class="hidden items-center justify-between">
+                <button id="prevFileBtn" class="btn btn-secondary">上一張</button>
+                <span id="fileCounter" class="font-semibold text-lg mx-4"></span>
+                <button id="nextFileBtn" class="btn btn-secondary">下一張</button>
+            </div>
+        </div>
 
-            <div id="control-panel-container">
-                <div class="p-6 space-y-6">
-                    <div>
-                        <h3 class="text-lg font-semibold mb-4">1. 載入檔案</h3>
-                        <div class="space-y-4">
-                            <div>
-                                <label for="imageFolderInput" class="btn btn-primary w-full">選擇圖片資料夾</label>
-                                <input type="file" id="imageFolderInput" class="hidden" webkitdirectory directory multiple>
-                                <p id="imageFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
-                            </div>
-                            <div>
-                                <label for="jsonFolderInput" class="btn btn-primary w-full">選擇 JSON 資料夾</label>
-                                <input type="file" id="jsonFolderInput" class="hidden" webkitdirectory directory multiple>
-                                <p id="jsonFolderStatus" class="text-sm text-gray-400 mt-2 text-center">尚未選擇</p>
-                            </div>
-                        </div>
-                        <div id="batch-nav" class="mt-4 hidden items-center justify-between">
-                            <button id="prevFileBtn" class="btn btn-secondary">上一張</button>
-                            <span id="fileCounter" class="font-semibold text-lg"></span>
-                            <button id="nextFileBtn" class="btn btn-secondary">下一張</button>
-                        </div>
-                    </div>
+        <!-- 編輯操作區塊 -->
+        <div id="editPanel" class="control-section opacity-50 pointer-events-none">
+            <h3 class="text-lg">編輯操作</h3>
+             <p class="text-xs text-center text-gray-400 -mt-2">提示：直接點選可變形，按住 Shift 可多選。</p>
+            <div class="flex flex-wrap gap-2 justify-center">
+                <button id="drawModeBtn" class="btn btn-secondary">拖曳新增矩形框</button>
+                <button id="autoFontSizeBtn" class="btn btn-success">自動字號</button>
+                <button id="fitBlockBtn" class="btn btn-info" disabled>自適應外框</button>
+                <button id="rectifyBtn" class="btn btn-warning">矩形化</button>
+                <button id="straightenBtn" class="btn btn-info">扶正</button>
+                <button id="mergeBtn" class="btn btn-success" disabled>合併 (0)</button>
+                <button id="deleteBtn" class="btn btn-danger" disabled>刪除 (0)</button>
+                <button id="splitBtn" class="btn btn-warning" disabled>拆分选中</button>
+                <button id="editTextBtn" class="btn btn-info" disabled>修改文字</button>
+                <button id="editPropBtn" class="btn btn-purple" disabled>改屬性</button>
+                <button id="editFontSizeBtn" class="btn btn-purple" disabled>改字號</button>
+                <button id="changeCornersBtn" class="btn btn-purple" disabled>改变四角</button>
+            </div>
+        </div>
 
-                    <div class="border-t border-gray-600 pt-6">
-                        <h3 class="text-lg font-semibold mb-4">預處理</h3>
-                        <div id="preprocessPanel" class="space-y-4 opacity-50 pointer-events-none">
-                            <button id="replaceBtn" class="btn btn-warning w-full">套用固定取代規則</button>
-                            <button id="batchAutoFontSizeBtn" class="btn btn-success w-full">所有页面自动字号</button>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-gray-600 pt-6">
-                        <h3 class="text-lg font-semibold mb-4">編輯操作</h3>
-                        <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
-                            <button id="drawModeBtn" class="btn btn-secondary w-full">拖曳新增矩形框</button>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button id="autoFontSizeBtn" class="btn btn-success w-full">自動字號</button>
-                                <button id="fitBlockBtn" class="btn btn-info w-full" disabled>自適應外框</button>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button id="rectifyBtn" class="btn btn-warning w-full">矩形化</button>
-                                <button id="straightenBtn" class="btn btn-info w-full">扶正</button>
-                            </div>
-                            <p class="text-xs text-center text-gray-400">提示：直接點選可變形，按住 Shift 可多選。</p>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button id="mergeBtn" class="btn btn-success w-full" disabled>合併 (0)</button>
-                                <button id="deleteBtn" class="btn btn-danger w-full" disabled>刪除 (0)</button>
-                                <button id="splitBtn" class="btn btn-warning w-full" disabled>拆分选中</button>
-                                <button id="editTextBtn" class="btn btn-info w-full" disabled>修改文字</button>
-                            </div>
-                            <div class="grid grid-cols-3 gap-2">
-                                <button id="editPropBtn" class="btn btn-purple w-full" disabled>改屬性</button>
-                                <button id="editFontSizeBtn" class="btn btn-purple w-full" disabled>改字號</button>
-                                <button id="changeCornersBtn" class="btn btn-purple w-full" disabled>改变四角</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-gray-600 pt-6">
-                        <h3 class="text-lg font-semibold mb-4">顯示選項</h3>
-                        <div class="space-y-3">
-                            <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框 (綠色)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行 (藍/黃/紅)</label>
-                            <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容</button>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-gray-600 pt-6">
-                         <h3 class="text-lg font-semibold mb-4">儲存結果</h3>
-                        <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出當前 JSON</button>
+        <!-- 顯示與儲存區塊 -->
+        <div class="control-section">
+            <h3 class="text-lg">顯示與儲存</h3>
+            <div class="flex gap-4 justify-center">
+                 <div class="space-y-3">
+                    <label class="checkbox-label"><input type="checkbox" id="showBlocks" class="checkbox" checked>總體邊界框</label>
+                    <label class="checkbox-label"><input type="checkbox" id="showLines" class="checkbox" checked>精確文字行</label>
+                    <label class="checkbox-label"><input type="checkbox" id="showText" class="checkbox" checked>文字內容</label>
+                </div>
+                <div class="flex flex-col gap-4">
+                    <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出當前 JSON</button>
+                    <!-- 預處理按鈕也移到這裡，讓佈局更緊湊 -->
+                    <div id="preprocessPanel" class="flex flex-col gap-2 opacity-50 pointer-events-none">
+                         <button id="replaceBtn" class="btn btn-warning w-full">套用取代規則</button>
+                         <button id="batchAutoFontSizeBtn" class="btn btn-success w-full">所有页面自动字号</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- 主要內容區域 -->
+    <main id="main-content">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
+            <p class="mt-2 text-lg text-gray-400">工具列已更新至頂部，支援響應式佈局。</p>
+        </header>
+
+        <div class="card">
+             <canvas id="mainCanvas"></canvas>
+        </div>
+    </main>
+
     <script>
-        // ... (原有的 JavaScript 程式碼完全不用修改，可以直接複製貼上)
+        // --- 新增的 JS 程式碼，用於動態調整佈局 ---
+        const topToolbar = document.getElementById('top-toolbar');
+        const mainContent = document.getElementById('main-content');
+
+        function adjustContentPadding() {
+            if (!topToolbar || !mainContent) return;
+            const toolbarHeight = topToolbar.offsetHeight;
+            mainContent.style.paddingTop = `${toolbarHeight + 32}px`; // 加上一些額外間距
+        }
+
+        // 頁面載入和視窗大小改變時都執行調整
+        window.addEventListener('load', adjustContentPadding);
+        window.addEventListener('resize', adjustContentPadding);
+        // 也許需要一個更可靠的觸發時機，例如 MutationObserver
+        new MutationObserver(adjustContentPadding).observe(topToolbar, {
+            childList: true, subtree: true, attributes: true
+        });
+
+        // --- 以下為原有的 JavaScript 程式碼，無需修改 ---
         // DOM 元素
         const imageFolderInput = document.getElementById('imageFolderInput');
         const jsonFolderInput = document.getElementById('jsonFolderInput');
@@ -344,6 +378,9 @@
             loadFile(currentFileIndex);
             batchNav.classList.remove('hidden');
             batchNav.classList.add('flex');
+            
+            // 載入檔案後，手動觸發一次佈局調整
+            setTimeout(adjustContentPadding, 100);
         }
 
         function navigateFiles(direction) {
