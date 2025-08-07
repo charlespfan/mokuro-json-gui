@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (精确拆分功能)</title>
+    <title>JSON 標註互動式編輯工具 (调整控制点大小)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (精确拆分功能)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (调整控制点大小)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -211,7 +211,11 @@
             center: {x: 0, y: 0},
             startAngle: 0
         };
-        const HANDLE_RADIUS = 8;
+        
+        // --- *** 修改开始: 分别定义不同控制点的大小 *** ---
+        const HANDLE_RADIUS = 8; // 边缘和旋转控制点的大小
+        const SCALE_HANDLE_RADIUS = 5; // 四个角的缩放控制点的大小
+        // --- *** 修改结束 *** ---
 
         // --- 排版相關常數 ---
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟";
@@ -232,7 +236,7 @@
         fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
-        splitBtn.addEventListener('click', splitSelectedLines); // *** 修改：绑定到新的拆分函数 ***
+        splitBtn.addEventListener('click', splitSelectedLines);
         editTextBtn.addEventListener('click', editSelectedLineText);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
@@ -473,7 +477,10 @@
                 
                 for (let i = 0; i < handles.length; i++) {
                     const handle = handles[i];
-                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS) {
+                    // --- *** 修改开始: 根据控制点类型判断点击范围 *** ---
+                    const radius = handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS;
+                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= radius) {
+                    // --- *** 修改结束 *** ---
                         activeTransform.action = handle.type;
                         activeTransform.handleIndex = i;
                         activeTransform.startPos = pos;
@@ -657,7 +664,6 @@
             deleteBtn.disabled = count < 1;
             deleteBtn.textContent = `刪除 (${count})`;
 
-            // *** 修改：更新拆分按钮的逻辑 ***
             splitBtn.disabled = !(count > 0 && isSingleBlockSelected);
             splitBtn.textContent = `拆分选中 (${count})`;
 
@@ -749,7 +755,6 @@
             drawVisualizations();
         }
 
-        // --- *** 修改开始: 全新的拆分函数 *** ---
         function splitSelectedLines() {
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex === -1 || selectedLines.length === 0) {
@@ -760,42 +765,36 @@
             const originalBlock = jsonData.blocks[selectedBlockIndex];
             const newBlocks = [];
             
-            // 为了安全地从原数组中删除，先收集要移除的行的索引，并从大到小排序
             const indicesToRemove = selectedLines.map(sel => sel.lineIndex).sort((a, b) => b - a);
 
-            // 从选中的行创建新的区块
             indicesToRemove.forEach(lineIndex => {
                 const lineText = originalBlock.lines[lineIndex];
                 const lineCoords = originalBlock.lines_coords[lineIndex];
                 
                 const newBlock = {
-                    ...originalBlock, // 继承原区块的属性，如 vertical, font_size
+                    ...originalBlock,
                     lines: [lineText],
                     lines_coords: [lineCoords],
-                    box: [] // 稍后重新计算
+                    box: []
                 };
-                recalculateBoxForBlock(newBlock); // 为新区块计算紧凑的外框
+                recalculateBoxForBlock(newBlock);
                 newBlocks.push(newBlock);
             });
 
-            // 从原区块中移除被选中的行
             indicesToRemove.forEach(lineIndex => {
                 originalBlock.lines.splice(lineIndex, 1);
                 originalBlock.lines_coords.splice(lineIndex, 1);
             });
 
-            // 如果原区块已经空了，就将其从数据中删除
             if (originalBlock.lines.length === 0) {
                 jsonData.blocks.splice(selectedBlockIndex, 1);
             }
             
-            // 将新创建的区块添加到总数据中
             jsonData.blocks.push(...newBlocks);
 
             if(matchedFiles.length > 0) matchedFiles[currentFileIndex].modifiedJsonData = jsonData;
             resetSelectionAndRedraw();
         }
-        // --- *** 修改结束 *** ---
 
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
@@ -935,16 +934,18 @@
                             const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
                                 ctx.beginPath();
+                                // --- *** 修改开始: 根据控制点类型绘制不同大小 *** ---
                                 if (handle.type === 'scale') {
-                                    ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
+                                    ctx.arc(handle.x, handle.y, SCALE_HANDLE_RADIUS, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
                                 } else if (handle.type === 'move-edge') {
                                     ctx.rect(handle.x - HANDLE_RADIUS / 2, handle.y - HANDLE_RADIUS / 2, HANDLE_RADIUS, HANDLE_RADIUS);
                                     ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
-                                } else {
+                                } else { // rotate
                                     ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
                                 }
+                                // --- *** 修改结束 *** ---
                                 ctx.fill();
                             });
                         }
