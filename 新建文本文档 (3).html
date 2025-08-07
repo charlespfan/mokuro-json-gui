@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSON 標註互動式編輯工具 (视觉元素动态缩放)</title>
-    <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
@@ -51,7 +49,7 @@
             box-shadow: 0 0 0 3px #1f2937, 0 0 0 5px #f59e0b;
         }
         .btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
-        
+
         canvas {
             border-radius: 0.5rem;
             border: 2px dashed #4b5563;
@@ -63,20 +61,41 @@
         .draw-mode canvas { cursor: crosshair; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; }
         .checkbox { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; border-radius: 0.25rem; accent-color: #3b82f6; }
+
+        /* --- 新增和修改的樣式 --- */
+        #main-container {
+            position: relative; /* 作為懸浮面板的定位基準 */
+        }
+        #control-panel-container {
+            position: absolute; /* 設定為絕對定位 */
+            top: 1rem;          /* 距離頂部 1rem */
+            left: 1rem;         /* 距離左側 1rem */
+            width: 380px;       /* 固定寬度 */
+            z-index: 10;        /* 確保在 Canvas 之上 */
+            max-height: calc(100vh - 4rem); /* 限制最大高度，避免超出視窗 */
+            overflow-y: auto;   /* 如果內容過多則顯示滾動條 */
+            background-color: rgba(31, 41, 55, 0.85); /* 半透明背景，增加懸浮感 */
+            backdrop-filter: blur(8px); /* 模糊背景 (毛玻璃效果) */
+            border-radius: 0.75rem;
+            border: 1px solid #374151;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
-    <div class="max-w-7xl mx-auto">
+    <div class="max-w-full mx-auto">
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (视觉元素动态缩放)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <!-- 控制面板 -->
-            <div class="md:col-span-1">
-                <div class="card space-y-6">
-                    <!-- 檔案選擇 -->
+        <div id="main-container">
+            <div class="card">
+                 <canvas id="mainCanvas"></canvas>
+            </div>
+
+            <div id="control-panel-container">
+                <div class="p-6 space-y-6">
                     <div>
                         <h3 class="text-lg font-semibold mb-4">1. 載入檔案</h3>
                         <div class="space-y-4">
@@ -98,7 +117,6 @@
                         </div>
                     </div>
 
-                    <!-- 預處理 -->
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">預處理</h3>
                         <div id="preprocessPanel" class="space-y-4 opacity-50 pointer-events-none">
@@ -107,7 +125,6 @@
                         </div>
                     </div>
 
-                    <!-- 編輯控制 -->
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">編輯操作</h3>
                         <div id="editPanel" class="space-y-4 opacity-50 pointer-events-none">
@@ -135,7 +152,6 @@
                         </div>
                     </div>
 
-                    <!-- 顯示選項 -->
                     <div class="border-t border-gray-600 pt-6">
                         <h3 class="text-lg font-semibold mb-4">顯示選項</h3>
                         <div class="space-y-3">
@@ -145,24 +161,17 @@
                         </div>
                     </div>
 
-                    <!-- 匯出 -->
                     <div class="border-t border-gray-600 pt-6">
                          <h3 class="text-lg font-semibold mb-4">儲存結果</h3>
                         <button id="exportBtn" class="btn btn-primary w-full opacity-50 pointer-events-none">匯出當前 JSON</button>
                     </div>
                 </div>
             </div>
-
-            <!-- 畫布區域 -->
-            <div class="md:col-span-2">
-                <div class="card">
-                     <canvas id="mainCanvas"></canvas>
-                </div>
-            </div>
         </div>
     </div>
 
     <script>
+        // ... (原有的 JavaScript 程式碼完全不用修改，可以直接複製貼上)
         // DOM 元素
         const imageFolderInput = document.getElementById('imageFolderInput');
         const jsonFolderInput = document.getElementById('jsonFolderInput');
@@ -205,13 +214,13 @@
         let jsonData = null;
         let isDrawingMode = false;
         let isCornerEditMode = false;
-        let selectedLines = []; 
+        let selectedLines = [];
         let activeTarget = null;
-        
+
         let isDraggingRect = false;
         let startDragPoint = { x: 0, y: 0 };
         let currentRect = { x: 0, y: 0, w: 0, h: 0 };
-        
+
         let activeTransform = {
             action: null,
             handleIndex: -1,
@@ -221,7 +230,7 @@
             center: {x: 0, y: 0},
             startAngle: 0
         };
-        
+
         const HANDLE_RADIUS = 8;
         const SCALE_HANDLE_RADIUS = 5;
 
@@ -253,7 +262,7 @@
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
         changeCornersBtn.addEventListener('click', toggleCornerEditMode);
         exportBtn.addEventListener('click', exportJson);
-        
+
         mainCanvas.addEventListener('mousedown', handleMouseDown);
         mainCanvas.addEventListener('mousemove', handleMouseMove);
         mainCanvas.addEventListener('mouseup', handleMouseUp);
@@ -280,7 +289,7 @@
 
             jsonFolderStatus.textContent = '正在解析 JSON 檔案...';
             jsonFolderStatus.classList.remove('text-green-400', 'text-red-400');
-            
+
             const jsonMap = new Map();
             jsonFiles.forEach(file => {
                 const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
@@ -348,7 +357,7 @@
 
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
-            
+
             jsonData = currentPair.data;
 
             try {
@@ -365,7 +374,7 @@
                     originalImage.onerror = reject;
                     originalImage.src = imageSrc;
                 });
-                
+
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
                 preprocessPanel.classList.remove('opacity-50', 'pointer-events-none');
                 exportBtn.classList.remove('opacity-50', 'pointer-events-none');
@@ -431,7 +440,7 @@
                     filesAffected = 1;
                 }
             }
-            
+
             alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
             drawVisualizations();
         }
@@ -468,7 +477,7 @@
             });
 
             alert(`处理完成！共为 ${matchedFiles.length} 个页面的 ${blocksProcessed} 个区块自动设定了字号。`);
-            
+
             drawVisualizations();
         }
 
@@ -483,7 +492,7 @@
                 resetSelectionAndRedraw();
             }
         }
-        
+
         function toggleCornerEditMode() {
             isCornerEditMode = !isCornerEditMode;
             changeCornersBtn.classList.toggle('active', isCornerEditMode);
@@ -529,7 +538,7 @@
                 const { blockIndex, lineIndex } = activeTarget;
                 const line = jsonData.blocks[blockIndex].lines_coords[lineIndex];
                 const handles = getHandlesForLine(line);
-                
+
                 for (let i = 0; i < handles.length; i++) {
                     const handle = handles[i];
                     const radius = (handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS) * scaleFactor;
@@ -559,13 +568,13 @@
                 activeTarget = clickedLine;
                 selectedLines = clickedLine ? [clickedLine] : [];
             }
-            
+
             if (activeTarget && isPointInPolygon(pos, jsonData.blocks[activeTarget.blockIndex].lines_coords[activeTarget.lineIndex].map(p=>({x:p[0], y:p[1]})))) {
                  activeTransform.action = 'move';
                  activeTransform.startPos = pos;
                  activeTransform.originalPoints = JSON.parse(JSON.stringify(jsonData.blocks[activeTarget.blockIndex].lines_coords[activeTarget.lineIndex]));
             }
-            
+
             updateActionButtons();
             drawVisualizations();
         }
@@ -596,12 +605,12 @@
                     case 2: new_x2 += dx; new_y2 += dy; break;
                     case 3: new_x1 += dx; new_y2 += dy; break;
                 }
-                
+
                 block.box[0] = Math.min(new_x1, new_x2);
                 block.box[1] = Math.min(new_y1, new_y2);
                 block.box[2] = Math.max(new_x1, new_x2);
                 block.box[3] = Math.max(new_y1, new_y2);
-                
+
                 drawVisualizations();
                 return;
             }
@@ -636,7 +645,7 @@
                     newPoints[p1Index] = [p1[0] + moveX, p1[1] + moveY];
                     newPoints[p2Index] = [p2[0] + moveX, p2[1] + moveY];
                 }
-                
+
                 jsonData.blocks[blockIndex].lines_coords[lineIndex] = newPoints;
             }
             drawVisualizations();
@@ -667,7 +676,7 @@
                 drawVisualizations();
             }
         }
-        
+
         function handleMouseOut(e) {
             if (isDrawingMode && isDraggingRect) {
                 isDraggingRect = false;
@@ -682,7 +691,7 @@
 
         // --- 核心編輯邏輯 ---
         function addNewLine(text, polygon, width, height) {
-            const isVertical = (height / width) >= 0.9; 
+            const isVertical = (height / width) >= 0.9;
             const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
@@ -728,14 +737,14 @@
             editPropBtn.disabled = !isSingleLineSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            
+
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
                 changeCornersBtn.classList.remove('active');
             }
         }
-        
+
         function editSelectedLineText() {
             if (selectedLines.length !== 1) return;
             const { blockIndex, lineIndex } = selectedLines[0];
@@ -745,7 +754,7 @@
                 resetSelectionAndRedraw();
             }
         }
-        
+
         function editSelectedBlockProps() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -823,13 +832,13 @@
 
             const originalBlock = jsonData.blocks[selectedBlockIndex];
             const newBlocks = [];
-            
+
             const indicesToRemove = selectedLines.map(sel => sel.lineIndex).sort((a, b) => b - a);
 
             indicesToRemove.forEach(lineIndex => {
                 const lineText = originalBlock.lines[lineIndex];
                 const lineCoords = originalBlock.lines_coords[lineIndex];
-                
+
                 const newBlock = {
                     ...originalBlock,
                     lines: [lineText],
@@ -848,7 +857,7 @@
             if (originalBlock.lines.length === 0) {
                 jsonData.blocks.splice(selectedBlockIndex, 1);
             }
-            
+
             jsonData.blocks.push(...newBlocks);
 
             resetSelectionAndRedraw();
@@ -883,8 +892,8 @@
                 vertical: baseBlock.vertical,
                 box: []
             };
-            
-            deleteSelectedLines(false); 
+
+            deleteSelectedLines(false);
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
 
@@ -902,11 +911,11 @@
             jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
             if (redraw) resetSelectionAndRedraw();
         }
-        
+
         function resetSelectionAndRedraw() {
             selectedLines = [];
             activeTarget = null;
-            isCornerEditMode = false; 
+            isCornerEditMode = false;
             updateActionButtons();
             drawVisualizations();
         }
@@ -918,10 +927,10 @@
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            
+
             a.href = url;
             a.download = matchedFiles[currentFileIndex].jsonName;
-            
+
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -1034,13 +1043,13 @@
                     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSizeLabel}px "Noto Sans JP", sans-serif`;
-                    ctx.fillStyle = 'white'; 
+                    ctx.fillStyle = 'white';
                     ctx.lineWidth = 3 * scaleFactor;
                     ctx.strokeStyle = 'black';
                     const labelContent = `[${blockIndex}] FS: ${block.font_size ? block.font_size.toFixed(1) : 'N/A'}`;
                     ctx.strokeText(labelContent, x1, y1 - (10 * scaleFactor));
                     ctx.fillText(labelContent, x1, y1 - (10 * scaleFactor));
-                    
+
                     if (isBlockActive) {
                         ctx.strokeStyle = '#f59e0b';
                         ctx.lineWidth = 2 * scaleFactor;
@@ -1060,7 +1069,7 @@
                     block.lines_coords.forEach((linePolygon, lineIndex) => {
                         const isMultiSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
                         const isActiveTarget = activeTarget && activeTarget.blockIndex === blockIndex && activeTarget.lineIndex === lineIndex;
-                        
+
                         if (showLines) {
                             ctx.strokeStyle = isActiveTarget ? '#ef4444' : (isMultiSelected ? '#facc15' : '#3b82f6');
                             ctx.lineWidth = ((isActiveTarget || isMultiSelected) ? 4 : 2) * scaleFactor;
@@ -1070,7 +1079,7 @@
                             ctx.closePath();
                             ctx.stroke();
                         }
-                        
+
                         if (showText) {
                             drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size, scaleFactor);
                         }
@@ -1096,7 +1105,7 @@
                     });
                 }
             });
-            
+
             if (isDrawingMode && isDraggingRect) {
                 ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
                 ctx.strokeStyle = '#f59e0b';
@@ -1105,7 +1114,7 @@
                 ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
             }
         }
-        
+
         function isHalfWidth(char) {
             const code = char.charCodeAt(0);
             return (code >= 0x0020 && code <= 0x007E) || (code >= 0xFF61 && code <= 0xFF9F);
@@ -1146,7 +1155,7 @@
                     const char = text[i];
                     const charHeight = getCharVerticalHeight(char, fontSize);
                     const charY = currentY + charHeight / 2;
-                    
+
                     if (CHARS_TO_ROTATE.includes(char)) {
                         ctx.save();
                         ctx.translate(0, charY);
@@ -1194,7 +1203,7 @@
             }
             ctx.restore();
         }
-        
+
         function calculateAutoFontSize(text, polygon, isVertical) {
             const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
             const width1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
@@ -1204,7 +1213,7 @@
             const height1 = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
             const height2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
             const avgHeight = (height1 + height2) / 2;
-            
+
             if (!text || text.length === 0) return 20;
 
             if (isVertical) {
@@ -1257,11 +1266,11 @@
 
         function getHandlesForLine(line) {
             const handles = [];
-            
+
             if (isCornerEditMode) {
                 line.forEach((p, index) => handles.push({ x: p[0], y: p[1], type: 'scale', pointIndex: index }));
             }
-            
+
             for (let i = 0; i < 4; i++) {
                 const p1 = line[i]; const p2 = line[(i + 1) % 4];
                 handles.push({ x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2, type: 'move-edge', pointIndex: i });
@@ -1271,7 +1280,7 @@
             const center = getPolygonCenter(line);
             const angle = Math.atan2(topCenter.y - center.y, topCenter.x - center.x);
             handles.push({ x: topCenter.x + Math.cos(angle) * 25, y: topCenter.y + Math.sin(angle) * 25, type: 'rotate', pointIndex: -1 });
-            
+
             return handles;
         }
 
@@ -1293,7 +1302,7 @@
                 return [newX + center.x, newY + center.y];
             });
         }
-        
+
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
                 block.box = [0,0,0,0];
