@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (导航功能已修正)</title>
+    <title>JSON 標註互動式編輯工具 (智慧排版功能)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (导航功能已修正)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (智慧排版功能)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -337,7 +337,6 @@
             batchNav.classList.add('flex');
         }
 
-        // *** 修改开始: 恢复 navigateFiles 函数 ***
         function navigateFiles(direction) {
             if (matchedFiles.length === 0) return;
             const newIndex = currentFileIndex + direction;
@@ -346,7 +345,6 @@
                 loadFile(currentFileIndex);
             }
         }
-        // *** 修改结束 ***
 
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
@@ -653,7 +651,11 @@
                     const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
                     if (text !== null) {
                         const newPolygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
-                        addNewLine(text, newPolygon);
+                        // *** 修改开始: 调用 addNewLine 函数并传入宽高 ***
+                        const width = Math.abs(currentRect.w);
+                        const height = Math.abs(currentRect.h);
+                        addNewLine(text, newPolygon, width, height);
+                        // *** 修改结束 ***
                     }
                 }
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -678,11 +680,15 @@
         }
 
         // --- 核心編輯邏輯 ---
-        function addNewLine(text, polygon) {
-            const newBlock = { box: [], vertical: true, font_size: 20, lines_coords: [polygon], lines: [text] };
+        // *** 修改开始: addNewLine 函数现在接收 width 和 height ***
+        function addNewLine(text, polygon, width, height) {
+            // 如果高度大于宽度，或两者比例接近1，则设为竖排
+            const isVertical = (height / width) >= 0.9; 
+            const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
+        // *** 修改结束 ***
 
         function toggleLineSelection(blockIndex, lineIndex) {
             const findIndex = selectedLines.findIndex(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
