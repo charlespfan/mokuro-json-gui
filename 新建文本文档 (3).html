@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (智慧排版功能)</title>
+    <title>JSON 標註互動式編輯工具 (动态控制点大小)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -68,7 +68,7 @@
 <body class="p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (智慧排版功能)</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具 (动态控制点大小)</h1>
             <p class="mt-2 text-lg text-gray-400">直接點選可變形，按住Shift可多選。操作更直觀，效率更高。</p>
         </header>
 
@@ -507,12 +507,19 @@
                 return;
             }
 
+            // *** 修改开始: 在点击检测时也计算缩放比例 ***
+            const rect = mainCanvas.getBoundingClientRect();
+            const scaleFactor = mainCanvas.width / rect.width;
+            // *** 修改结束 ***
+
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex !== -1) {
                 const block = jsonData.blocks[selectedBlockIndex];
                 const blockHandles = getHandlesForBlock(block.box);
                 for (const handle of blockHandles) {
-                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS) {
+                    // *** 修改开始: 使用动态半径进行点击判断 ***
+                    if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS * scaleFactor) {
+                    // *** 修改结束 ***
                         activeTransform.action = 'scale-block';
                         activeTransform.handleIndex = handle.index;
                         activeTransform.startPos = pos;
@@ -529,8 +536,10 @@
                 
                 for (let i = 0; i < handles.length; i++) {
                     const handle = handles[i];
-                    const radius = handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS;
+                    // *** 修改开始: 使用动态半径进行点击判断 ***
+                    const radius = (handle.type === 'scale' ? SCALE_HANDLE_RADIUS : HANDLE_RADIUS) * scaleFactor;
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= radius) {
+                    // *** 修改结束 ***
                         if (handle.type === 'scale' && !isCornerEditMode) continue;
 
                         activeTransform.action = handle.type;
@@ -651,11 +660,9 @@
                     const text = prompt("請為這個新的 Line 框輸入文字內容:", "");
                     if (text !== null) {
                         const newPolygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
-                        // *** 修改开始: 调用 addNewLine 函数并传入宽高 ***
                         const width = Math.abs(currentRect.w);
                         const height = Math.abs(currentRect.h);
                         addNewLine(text, newPolygon, width, height);
-                        // *** 修改结束 ***
                     }
                 }
                 currentRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -680,15 +687,12 @@
         }
 
         // --- 核心編輯邏輯 ---
-        // *** 修改开始: addNewLine 函数现在接收 width 和 height ***
         function addNewLine(text, polygon, width, height) {
-            // 如果高度大于宽度，或两者比例接近1，则设为竖排
             const isVertical = (height / width) >= 0.9; 
             const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
-        // *** 修改结束 ***
 
         function toggleLineSelection(blockIndex, lineIndex) {
             const findIndex = selectedLines.findIndex(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
@@ -1019,6 +1023,11 @@
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             ctx.drawImage(originalImage, 0, 0, mainCanvas.width, mainCanvas.height);
 
+            // *** 修改开始: 计算缩放比例 ***
+            const rect = mainCanvas.getBoundingClientRect();
+            const scaleFactor = mainCanvas.width / rect.width;
+            // *** 修改结束 ***
+
             const showBlocks = showBlocksCheckbox.checked;
             const showLines = showLinesCheckbox.checked;
             const showText = showTextCheckbox.checked;
@@ -1044,7 +1053,10 @@
                         const blockHandles = getHandlesForBlock(block.box);
                         blockHandles.forEach(handle => {
                             ctx.beginPath();
-                            ctx.rect(handle.x - HANDLE_RADIUS / 2, handle.y - HANDLE_RADIUS / 2, HANDLE_RADIUS, HANDLE_RADIUS);
+                            // *** 修改开始: 使用动态计算的大小 ***
+                            const size = HANDLE_RADIUS * scaleFactor;
+                            ctx.rect(handle.x - size / 2, handle.y - size / 2, size, size);
+                            // *** 修改结束 ***
                             ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
                             ctx.fill();
                             ctx.stroke();
@@ -1075,16 +1087,19 @@
                             const handles = getHandlesForLine(linePolygon);
                             handles.forEach(handle => {
                                 ctx.beginPath();
+                                // *** 修改开始: 使用动态计算的半径 ***
                                 if (handle.type === 'scale') {
-                                    ctx.arc(handle.x, handle.y, SCALE_HANDLE_RADIUS, 0, 2 * Math.PI);
+                                    ctx.arc(handle.x, handle.y, SCALE_HANDLE_RADIUS * scaleFactor, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
                                 } else if (handle.type === 'move-edge') {
-                                    ctx.rect(handle.x - HANDLE_RADIUS / 2, handle.y - HANDLE_RADIUS / 2, HANDLE_RADIUS, HANDLE_RADIUS);
+                                    const size = HANDLE_RADIUS * scaleFactor;
+                                    ctx.rect(handle.x - size / 2, handle.y - size / 2, size, size);
                                     ctx.fillStyle = 'rgba(59, 130, 246, 0.9)';
                                 } else { // rotate
-                                    ctx.arc(handle.x, handle.y, HANDLE_RADIUS, 0, 2 * Math.PI);
+                                    ctx.arc(handle.x, handle.y, HANDLE_RADIUS * scaleFactor, 0, 2 * Math.PI);
                                     ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
                                 }
+                                // *** 修改结束 ***
                                 ctx.fill();
                             });
                         }
