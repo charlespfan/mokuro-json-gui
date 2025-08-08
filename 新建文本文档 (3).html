@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終規則版)</title>
+    <title>JSON 標註互動式編輯工具 (手動排序功能版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -69,6 +69,10 @@
         }
         .text-btn-primary { background-color: #3b82f6; }
         .text-btn-primary:hover { background-color: #2563eb; }
+        .text-btn-green { background-color: #22c55e; }
+        .text-btn-green:hover { background-color: #16a34a; }
+        .text-btn-red { background-color: #ef4444; }
+        .text-btn-red:hover { background-color: #dc2626; }
         .text-btn:disabled { background-color: #374151; color: #6b7280; cursor: not-allowed; }
 
         canvas {
@@ -79,6 +83,7 @@
             background-color: #374151;
             cursor: default;
         }
+        .reorder-mode canvas { cursor: pointer; }
         .draw-mode canvas { cursor: crosshair; }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; font-size: 0.875rem; white-space: nowrap; }
         .checkbox { width: 1rem; height: 1rem; margin-right: 0.375rem; border-radius: 0.25rem; accent-color: #3b82f6; }
@@ -154,6 +159,7 @@
             <button id="straightenBtn" class="char-btn" title="扶正">扶</button>
             <button id="mergeBtn" class="char-btn" title="合併 (0)" disabled>合</button>
             <button id="splitBtn" class="char-btn" title="拆分" disabled>拆</button>
+            <button id="reorderBtn" class="char-btn" title="手動排序">序</button>
 
             <button id="editTextBtn" class="char-btn" title="修改文字" disabled>文</button>
             <button id="editPropBtn" class="char-btn" title="改屬性" disabled>属</button>
@@ -161,6 +167,12 @@
             <button id="setAngleBtn" class="char-btn" title="設定角度" disabled>角</button>
             <button id="changeCornersBtn" class="icon-btn" title="改变四角" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5 0V6.375c0-.621.504-1.125 1.125-1.125h4.125c.621 0 1.125.504 1.125 1.125V10.5m-4.5 0h4.5" /></svg></button>
             <button id="deleteBtn" class="icon-btn" title="刪除 (0)" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
+        </div>
+        
+        <div id="reorder-toolbar" class="hidden items-center gap-3">
+            <span class="text-sm font-bold text-yellow-400">排序模式：請依序點擊區塊以設定新順序。</span>
+            <button id="reorderConfirmBtn" class="text-btn text-btn-green">✅ 完成</button>
+            <button id="reorderCancelBtn" class="text-btn text-btn-red">❌ 取消</button>
         </div>
 
         <div class="divider"></div>
@@ -247,12 +259,18 @@
         const mergeBtn = document.getElementById('mergeBtn');
         const deleteBtn = document.getElementById('deleteBtn');
         const splitBtn = document.getElementById('splitBtn');
+        const reorderBtn = document.getElementById('reorderBtn');
         const editTextBtn = document.getElementById('editTextBtn');
         const editPropBtn = document.getElementById('editPropBtn');
         const editFontSizeBtn = document.getElementById('editFontSizeBtn');
         const setAngleBtn = document.getElementById('setAngleBtn');
         const changeCornersBtn = document.getElementById('changeCornersBtn');
         const exportBtn = document.getElementById('exportBtn');
+
+        // Reorder Mode Elements
+        const reorderToolbar = document.getElementById('reorder-toolbar');
+        const reorderConfirmBtn = document.getElementById('reorderConfirmBtn');
+        const reorderCancelBtn = document.getElementById('reorderCancelBtn');
 
         // Modal elements
         const textEditModal = document.getElementById('textEditModal');
@@ -264,8 +282,8 @@
 
         let imageFiles = null, jsonFiles = null, matchedFiles = [], currentFileIndex = -1;
         let originalImage = null, jsonData = null;
-        let isDrawingMode = false, isCornerEditMode = false;
-        let selectedLines = [], activeTarget = null;
+        let isDrawingMode = false, isCornerEditMode = false, isReorderMode = false;
+        let selectedLines = [], activeTarget = null, reorderSequence = [];
         let isDraggingRect = false, startDragPoint = { x: 0, y: 0 }, currentRect = { x: 0, y: 0, w: 0, h: 0 };
         let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, originalAngle: 0, center: {x: 0, y: 0}, startAngle: 0 };
         const HANDLE_RADIUS = 8, SCALE_HANDLE_RADIUS = 5;
@@ -288,6 +306,7 @@
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedLines);
+        reorderBtn.addEventListener('click', toggleReorderMode);
         editTextBtn.addEventListener('click', showTextEditModal);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
@@ -299,6 +318,10 @@
         mainCanvas.addEventListener('mouseup', handleMouseUp);
         mainCanvas.addEventListener('mouseout', handleMouseOut);
         
+        // Reorder listeners
+        reorderConfirmBtn.addEventListener('click', applyReorder);
+        reorderCancelBtn.addEventListener('click', toggleReorderMode);
+
         textModalCancel.addEventListener('click', () => {
             textEditModal.classList.add('hidden');
             textEditModal.classList.remove('flex');
@@ -565,6 +588,12 @@
         }
         function handleMouseDown(e) {
             const pos = getMousePos(e);
+
+            if (isReorderMode) {
+                handleReorderClick(pos);
+                return;
+            }
+
             if (isDrawingMode) {
                 isDraggingRect = true;
                 startDragPoint = pos;
@@ -851,16 +880,6 @@
             drawVisualizations();
         }
         
-        // ====================================================================
-        // START: REWRITTEN FUNCTIONS
-        // ====================================================================
-
-        /**
-         * 拆分功能
-         * 規則: 根據新產生區塊的視覺位置進行排序。
-         * - 橫排: 從上到下 (Y 座標小的在前)
-         * - 豎排: 從右到左 (X 座標大的在前)
-         */
         function splitSelectedLines() {
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex === -1 || selectedLines.length === 0) {
@@ -875,7 +894,6 @@
 
             const groups = [];
 
-            // 創建「保留下來的」區塊群組
             if (remainingIndices.length > 0) {
                 const newLines = remainingIndices.map(i => originalBlock.lines[i]);
                 const newLinesCoords = remainingIndices.map(i => originalBlock.lines_coords[i]);
@@ -887,7 +905,6 @@
                 groups.push(newBlock);
             }
 
-            // 為每一個被拆分的 line 創建獨立的區塊群組
             splitIndicesSet.forEach(lineIndex => {
                 const newBlock = {
                     ...JSON.parse(JSON.stringify(originalBlock)),
@@ -899,35 +916,27 @@
                 groups.push(newBlock);
             });
 
-            // 根據視覺位置對所有新產生的區塊進行排序
             groups.sort((a, b) => {
                 const centerA = getPolygonCenter(a.lines_coords[0]);
                 const centerB = getPolygonCenter(b.lines_coords[0]);
                 if (originalBlock.vertical) {
-                    return centerB.x - centerA.x; // X 座標大的 (右邊) 在前
+                    return centerB.x - centerA.x;
                 } else {
-                    return centerA.y - centerB.y; // Y 座標小的 (上邊) 在前
+                    return centerA.y - centerB.y;
                 }
             });
 
-            // 用排序好的新區塊序列替換掉原始區塊
             jsonData.blocks.splice(selectedBlockIndex, 1, ...groups);
             
             resetSelectionAndRedraw();
         }
         
-        /**
-         * 合併功能
-         * 規則: 新區塊內的 line 順序，由使用者點擊選取的順序決定。
-         */
         function mergeSelectedLines() {
             if (selectedLines.length < 2) {
                 alert("請至少選擇兩個文字行來進行合併。");
                 return;
             }
 
-            // 步驟 1: 按照使用者的選擇順序 (selectedLines 的陣列順序) 來收集 line 的資訊
-            // 這裡不再進行任何排序，直接信任 selectedLines 的順序
             const linesToMergeDetails = selectedLines.map(sel => ({
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
                 coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
@@ -935,7 +944,6 @@
                 originalBlockIndex: sel.blockIndex,
             }));
 
-            // 步驟 2: 決定新合併區塊的屬性 (繼承自第一個被選中的 line 所屬的區塊)
             const leadingLine = linesToMergeDetails[0];
             const fontSizes = linesToMergeDetails.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
@@ -957,12 +965,10 @@
             };
             recalculateBoxForBlock(newBlock);
 
-            // 步驟 3: 從 jsonData.blocks 中移除所有舊的區塊，並插入新的合併區塊
             const blockIndicesToRemove = new Set(selectedLines.map(sel => sel.blockIndex));
             
             const remainingBlocks = jsonData.blocks.filter((_, index) => !blockIndicesToRemove.has(index));
 
-            // 找出所有被移除的區塊中，最小的那個索引，作為新區塊的插入點
             const insertionIndex = Math.min(...Array.from(blockIndicesToRemove));
 
             remainingBlocks.splice(insertionIndex, 0, newBlock);
@@ -971,10 +977,6 @@
 
             resetSelectionAndRedraw();
         }
-
-        // ====================================================================
-        // END: REWRITTEN FUNCTIONS
-        // ====================================================================
 
         function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
@@ -1020,11 +1022,89 @@
             }
         }
 
+        // ====================================================================
+        // START: NEW REORDER FUNCTIONS
+        // ====================================================================
+
+        function toggleReorderMode() {
+            isReorderMode = !isReorderMode;
+            reorderBtn.classList.toggle('active', isReorderMode);
+            mainCanvas.parentElement.parentElement.classList.toggle('reorder-mode', isReorderMode);
+            
+            if (isReorderMode) {
+                // Enter reorder mode
+                reorderSequence = [];
+                resetSelectionAndRedraw(); // Clear any active selections
+                editPanel.classList.add('opacity-50', 'pointer-events-none');
+                reorderToolbar.classList.remove('hidden');
+                reorderToolbar.classList.add('flex');
+            } else {
+                // Exit reorder mode (Cancel)
+                reorderSequence = [];
+                editPanel.classList.remove('opacity-50', 'pointer-events-none');
+                reorderToolbar.classList.add('hidden');
+                reorderToolbar.classList.remove('flex');
+            }
+            drawVisualizations();
+        }
+
+        function handleReorderClick(pos) {
+            const clickedBlockIndex = findBlockAt(pos);
+            if (clickedBlockIndex !== -1 && !reorderSequence.includes(clickedBlockIndex)) {
+                reorderSequence.push(clickedBlockIndex);
+                drawVisualizations();
+            }
+        }
+
+        function applyReorder() {
+            if (reorderSequence.length === 0) {
+                toggleReorderMode(); // Just exit if nothing was clicked
+                return;
+            }
+
+            const newBlocks = [];
+            const reorderedIndicesSet = new Set(reorderSequence);
+
+            // Add the reordered blocks first, in the new sequence
+            reorderSequence.forEach(originalIndex => {
+                newBlocks.push(jsonData.blocks[originalIndex]);
+            });
+
+            // Add the remaining blocks that were not reordered
+            jsonData.blocks.forEach((block, index) => {
+                if (!reorderedIndicesSet.has(index)) {
+                    newBlocks.push(block);
+                }
+            });
+
+            jsonData.blocks = newBlocks;
+            toggleReorderMode(); // This will also redraw
+        }
+        
+        function findBlockAt(pos) {
+            for (let i = jsonData.blocks.length - 1; i >= 0; i--) {
+                const block = jsonData.blocks[i];
+                if (!block.lines_coords) continue;
+                for (let j = 0; j < block.lines_coords.length; j++) {
+                    if (isPointInPolygon(pos, block.lines_coords[j])) {
+                        return i; // Return the block index
+                    }
+                }
+            }
+            return -1; // No block found
+        }
+        
+        // ====================================================================
+        // END: NEW REORDER FUNCTIONS
+        // ====================================================================
+
         function resetSelectionAndRedraw() {
             selectedLines = [];
             activeTarget = null;
             isCornerEditMode = false;
-            updateActionButtons();
+            if (!isReorderMode) {
+                updateActionButtons();
+            }
             drawVisualizations();
         }
         function exportJson() {
@@ -1282,6 +1362,28 @@
                             });
                         }
                     });
+                }
+                
+                // Draw reorder labels if in reorder mode
+                if (isReorderMode) {
+                    const reorderIndex = reorderSequence.indexOf(blockIndex);
+                    if (reorderIndex !== -1) {
+                        const [x1, y1, x2, y2] = block.box;
+                        const labelX = x1;
+                        const labelY = y1;
+                        const labelSize = 12 * scaleFactor;
+
+                        ctx.fillStyle = 'rgba(251, 191, 36, 0.9)'; // Amber color
+                        ctx.beginPath();
+                        ctx.arc(labelX, labelY, labelSize, 0, 2 * Math.PI);
+                        ctx.fill();
+
+                        ctx.font = `bold ${labelSize}px sans-serif`;
+                        ctx.fillStyle = 'black';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(reorderIndex + 1, labelX, labelY);
+                    }
                 }
             });
             if (isDrawingMode && isDraggingRect) {
