@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (全形數字修正版)</title>
+    <title>JSON 標註互動式編輯工具 (相容性修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -336,10 +336,12 @@
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
-            if (jsonData && jsonData.blocks) {
+            if (jsonData && jsonData.blocks && Array.isArray(jsonData.blocks)) {
                 jsonData.blocks.forEach(block => {
-                    if (block.angle === undefined) block.angle = 0;
-                    if (block.tcy_enabled === undefined) block.tcy_enabled = true;
+                    if (block && typeof block === 'object') {
+                        if (block.angle === undefined) block.angle = 0;
+                        if (block.tcy_enabled === undefined) block.tcy_enabled = true;
+                    }
                 });
             }
             try {
@@ -1078,7 +1080,7 @@
             if (isVertical) {
                 const tcyEnabled = block.tcy_enabled;
                 const segments = [];
-                const regex = /([\d\uFF10-\uFF19]{2,4})/g; // LOGIC FIX: Match both half-width and full-width digits
+                const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
                 let lastIndex = 0;
 
@@ -1183,7 +1185,7 @@
             if (isVertical) {
                 let totalCharCountForHeight = 0;
                 const tcyEnabled = block.tcy_enabled;
-                const regex = /([\d\uFF10-\uFF19]{2,4})/g; // LOGIC FIX: Match both half-width and full-width digits
+                const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
                 let lastIndex = 0;
                 let processedText = "";
@@ -1193,7 +1195,7 @@
                         if (match.index > lastIndex) {
                             processedText += text.substring(lastIndex, match.index);
                         }
-                        processedText += "T"; // Replace TCY block with a single placeholder character
+                        processedText += "T";
                         lastIndex = regex.lastIndex;
                     }
                 }
