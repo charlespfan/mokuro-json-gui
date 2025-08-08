@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終邏輯修正版)</title>
+    <title>JSON 標註互動式編輯工具 (矩形化/扶正邏輯修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -806,33 +806,63 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        
+        /**
+         * LOGIC FIX: Rectify now applies to selected lines, or all lines if none are selected.
+         */
         function handleRectify() {
             if (!jsonData) return;
-            getTargetLines().forEach(target => {
-                const { blockIndex, lineIndex } = target;
-                jsonData.blocks[blockIndex].lines_coords[lineIndex] = rectifyPolygon(jsonData.blocks[blockIndex].lines_coords[lineIndex]);
+            const targets = getTargetLines();
+            if (targets.length === 0) return;
+
+            const affectedBlockIndices = new Set();
+            targets.forEach(target => {
+                affectedBlockIndices.add(target.blockIndex);
+                const originalPolygon = jsonData.blocks[target.blockIndex].lines_coords[target.lineIndex];
+                jsonData.blocks[target.blockIndex].lines_coords[target.lineIndex] = rectifyPolygon(originalPolygon);
             });
+
+            affectedBlockIndices.forEach(blockIndex => {
+                recalculateBoxForBlock(jsonData.blocks[blockIndex]);
+            });
+
             drawVisualizations();
         }
         
+        /**
+         * LOGIC FIX: Straighten (扶正) now applies the block's rotation to its
+         * inner lines and then resets the block's angle to 0. This logic is now
+         * applied based on selection.
+         */
         function handleStraighten() {
-            const selectedBlockIndex = getSelectedBlockIndex();
-            if (selectedBlockIndex === -1) return;
-            
-            const block = jsonData.blocks[selectedBlockIndex];
-            const angleToCorrectRad = block.angle * Math.PI / 180;
-            
-            if (Math.abs(block.angle) < 0.01) return;
+            if (!jsonData) return;
+            const targets = getTargetLines();
+            if (targets.length === 0) return;
 
-            const center = getBoxCenter(block.box);
+            const affectedBlockIndices = new Set();
+            targets.forEach(target => affectedBlockIndices.add(target.blockIndex));
             
-            block.lines_coords = block.lines_coords.map(polygon => {
-                return rotatePolygon(polygon, center, angleToCorrectRad);
+            affectedBlockIndices.forEach(blockIndex => {
+                const block = jsonData.blocks[blockIndex];
+                const angleToCorrectRad = block.angle * Math.PI / 180;
+
+                if (Math.abs(block.angle) < 0.01) return;
+
+                const center = getBoxCenter(block.box);
+                
+                // Only apply rotation to the targeted lines within this block
+                const targetLineIndices = targets
+                    .filter(t => t.blockIndex === blockIndex)
+                    .map(t => t.lineIndex);
+
+                targetLineIndices.forEach(lineIndex => {
+                    const polygon = block.lines_coords[lineIndex];
+                    block.lines_coords[lineIndex] = rotatePolygon(polygon, center, angleToCorrectRad);
+                });
+                
+                block.angle = 0;
+                recalculateBoxForBlock(block);
             });
-            
-            block.angle = 0;
-            
-            recalculateBoxForBlock(block);
             
             drawVisualizations();
         }
@@ -853,17 +883,16 @@
             }
         }
         function getTargetLines() {
-            const targets = [];
             if (selectedLines.length > 0) {
-                targets.push(...selectedLines);
-            } else {
-                jsonData.blocks.forEach((block, blockIndex) => {
-                    block.lines_coords.forEach((_, lineIndex) => {
-                        targets.push({ blockIndex, lineIndex });
-                    });
-                });
+                return selectedLines;
             }
-            return targets;
+            const allLines = [];
+            jsonData.blocks.forEach((block, blockIndex) => {
+                block.lines_coords.forEach((_, lineIndex) => {
+                    allLines.push({ blockIndex, lineIndex });
+                });
+            });
+            return allLines;
         }
         function distance(p1, p2) { return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]); }
         function rectifyPolygon(polygon) {
@@ -1188,7 +1217,8 @@
         }
         
         /**
-         * The final, corrected logic for recalculating the bounding box.
+         * LOGIC FIX: The final, corrected logic for recalculating the bounding box.
+         * The block's angle is now always determined by the average baseline angle of its lines.
          */
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
@@ -1201,7 +1231,6 @@
             let totalBaselineVecX = 0;
             let totalBaselineVecY = 0;
 
-            // --- Step 1: Calculate the average BASELINE angle from the top/bottom edges ---
             block.lines_coords.forEach(poly => {
                 allPoints.push(...poly.map(p => ({ x: p[0], y: p[1] })));
                 const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
@@ -1216,19 +1245,19 @@
             const baselineAngleRad = Math.atan2(totalBaselineVecY, totalBaselineVecX);
             let baselineAngleDeg = baselineAngleRad * 180 / Math.PI;
 
-            // --- Step 2: The block's angle IS the baseline angle. Normalize it. ---
+            // Normalize the angle to prefer smaller absolute values
             if (baselineAngleDeg > 90) baselineAngleDeg -= 180;
             if (baselineAngleDeg < -90) baselineAngleDeg += 180;
             block.angle = baselineAngleDeg;
 
-            // --- Step 3: Rotate all points to be horizontal for AABB calculation ---
+            // Rotate all points to a temporary horizontal alignment for AABB calculation
             const center = allPoints.reduce((acc, p) => ({x: acc.x + p.x, y: acc.y + p.y}), {x:0, y:0});
             center.x /= allPoints.length;
             center.y /= allPoints.length;
 
             const rotatedPoints = allPoints.map(p => rotatePoint(p, center, -block.angle));
 
-            // --- Step 4: Find the AABB of the rotated (now horizontal) points ---
+            // Find the AABB of the rotated points
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             rotatedPoints.forEach(p => {
                 minX = Math.min(minX, p.x);
@@ -1237,13 +1266,15 @@
                 maxY = Math.max(maxY, p.y);
             });
 
-            // --- Step 5: Calculate the final box properties ---
+            // The dimensions of the box are determined by the AABB
             const width = maxX - minX;
             const height = maxY - minY;
+
+            // The center of the AABB needs to be rotated back to find the true box center
             const rotatedCenter = { x: minX + width / 2, y: minY + height / 2 };
             const finalCenter = rotatePoint(rotatedCenter, center, block.angle);
 
-            // --- Step 6: Store the box. The renderer will use this and block.angle ---
+            // Store the un-rotated box dimensions relative to the final center
             block.box = [
                 finalCenter.x - width / 2,
                 finalCenter.y - height / 2,
