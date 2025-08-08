@@ -336,7 +336,7 @@
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
-            if (jsonData.blocks) {
+            if (jsonData && jsonData.blocks) {
                 jsonData.blocks.forEach(block => {
                     if (block.angle === undefined) block.angle = 0;
                     if (block.tcy_enabled === undefined) block.tcy_enabled = true;
@@ -1016,7 +1016,8 @@
                         }
 
                         if (showText) {
-                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block, fontSize, scaleFactor);
+                            // BUG FIX: Pass block.font_size instead of undefined 'fontSize'
+                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block, block.font_size, scaleFactor);
                         }
                         if (isActiveTarget) {
                             getHandlesForLine(linePolygon).forEach(handle => {
