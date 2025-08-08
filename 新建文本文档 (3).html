@@ -511,7 +511,7 @@
         function applyFixedReplacements(isSilent = false) {
             if (!jsonData) return;
             const scope = isSilent ? true : confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
-            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
+            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"], ["-Ｏ", "-０"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
                 let count = 0;
@@ -973,41 +973,87 @@
             const linesToMergeDetails = selectedLines.map(sel => ({
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
                 coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
-                block: jsonData.blocks[sel.blockIndex],
-                originalBlockIndex: sel.blockIndex,
+                block: jsonData.blocks[sel.blockIndex]
             }));
 
-            const leadingLine = linesToMergeDetails[0];
+            // 1. 建立由選中行組成的新合併區塊
+            const leadingLineBlock = linesToMergeDetails[0].block;
             const fontSizes = linesToMergeDetails.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) { medianFontSize = 20; }
             else if (fontSizes.length % 2 === 0) {
-                const mid1 = fontSizes[fontSizes.length / 2 - 1];
-                const mid2 = fontSizes[fontSizes.length / 2];
-                medianFontSize = (mid1 + mid2) / 2;
+                medianFontSize = (fontSizes[fontSizes.length / 2 - 1] + fontSizes[fontSizes.length / 2]) / 2;
             } else {
                 medianFontSize = fontSizes[Math.floor(fontSizes.length / 2)];
             }
 
-            const newBlock = {
-                ...JSON.parse(JSON.stringify(leadingLine.block)),
+            const newMergedBlock = {
+                ...JSON.parse(JSON.stringify(leadingLineBlock)),
                 lines: linesToMergeDetails.map(l => l.text),
                 lines_coords: linesToMergeDetails.map(l => l.coord),
                 font_size: parseFloat(medianFontSize.toFixed(2)),
                 box: []
             };
-            recalculateBoxForBlock(newBlock);
+            recalculateBoxForBlock(newMergedBlock);
 
-            const blockIndicesToRemove = new Set(selectedLines.map(sel => sel.blockIndex));
+            // 2. 找出受影響的區塊以及其中被選中的行
+            const affectedBlockIndices = new Set();
+            const linesToMoveMap = new Map(); // Map<blockIndex, Set<lineIndex>>
+            selectedLines.forEach(sel => {
+                affectedBlockIndices.add(sel.blockIndex);
+                if (!linesToMoveMap.has(sel.blockIndex)) {
+                    linesToMoveMap.set(sel.blockIndex, new Set());
+                }
+                linesToMoveMap.get(sel.blockIndex).add(sel.lineIndex);
+            });
+
+            // 3. 建立最終的區塊列表
+            const finalBlocks = [];
+            // 首先加入新的合併區塊
+            finalBlocks.push(newMergedBlock);
+
+            jsonData.blocks.forEach((block, blockIndex) => {
+                if (!affectedBlockIndices.has(blockIndex)) {
+                    // 如果區塊完全未受影響，直接保留
+                    finalBlocks.push(block);
+                } else {
+                    // 如果區塊受影響，檢查是否有剩餘的行
+                    const linesToMove = linesToMoveMap.get(blockIndex);
+                    if (linesToMove.size < block.lines.length) {
+                        const remainingLines = [];
+                        const remainingCoords = [];
+                        block.lines.forEach((line, lineIndex) => {
+                            if (!linesToMove.has(lineIndex)) {
+                                remainingLines.push(line);
+                                remainingCoords.push(block.lines_coords[lineIndex]);
+                            }
+                        });
+
+                        // 為剩餘的行建立一個新的區塊
+                        const remainderBlock = {
+                            ...JSON.parse(JSON.stringify(block)),
+                            lines: remainingLines,
+                            lines_coords: remainingCoords,
+                            box: []
+                        };
+                        recalculateBoxForBlock(remainderBlock);
+                        finalBlocks.push(remainderBlock);
+                    }
+                    // 如果區塊中的所有行都被選中合併，則此區塊自然被捨棄，不執行任何操作
+                }
+            });
+
+            // 為了維持頁面順序的直觀性，可以選擇性地對區塊進行排序
+            finalBlocks.sort((a, b) => {
+                const boxA = a.box;
+                const boxB = b.box;
+                if (!boxA || boxA.length < 2 || !boxB || boxB.length < 2) return 0;
+                // 簡單地按頂部Y座標排序
+                return boxA[1] - boxB[1];
+            });
             
-            const remainingBlocks = jsonData.blocks.filter((_, index) => !blockIndicesToRemove.has(index));
-
-            const insertionIndex = Math.min(...Array.from(blockIndicesToRemove));
-
-            remainingBlocks.splice(insertionIndex, 0, newBlock);
-
-            jsonData.blocks = remainingBlocks;
-
+            // 4. 更新資料並重繪
+            jsonData.blocks = finalBlocks;
             resetSelectionAndRedraw();
         }
 
