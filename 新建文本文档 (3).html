@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (方向修正版)</title>
+    <title>JSON 標註互動式編輯工具 (負角度修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -179,7 +179,7 @@
         <main id="main-content">
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">已修正外框方向邏輯。</p>
+                <p class="mt-2 text-lg text-gray-400">已修正負角度計算邏輯。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -664,11 +664,6 @@
                 resetSelectionAndRedraw();
             }
         }
-
-        /**
-         * LOGIC FIX: When changing the vertical/horizontal property,
-         * the bounding box must be recalculated.
-         */
         function editSelectedBlockProps() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -677,13 +672,10 @@
             const newStatus = block.vertical ? "橫排" : "豎排";
             if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
                 block.vertical = !block.vertical;
-                // After changing the property, we MUST recalculate the box
                 recalculateBoxForBlock(block);
-                // Then redraw everything
                 drawVisualizations();
             }
         }
-
         function editSelectedBlockFontSize() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -1154,7 +1146,7 @@
         }
         
         /**
-         * LOGIC FIX: The main axis calculation now respects the `block.vertical` property.
+         * LOGIC FIX: Removed angle normalization to allow the full -180 to 180 degree range.
          */
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
@@ -1172,19 +1164,15 @@
                 
                 const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
                 
-                // Calculate vectors for both horizontal and vertical-ish sides
                 const h_vec1 = { x: p1[0] - p0[0], y: p1[1] - p0[1] };
                 const h_vec2 = { x: p2[0] - p3[0], y: p2[1] - p3[1] };
                 const v_vec1 = { x: p3[0] - p0[0], y: p3[1] - p0[1] };
                 const v_vec2 = { x: p2[0] - p1[0], y: p2[1] - p1[1] };
 
-                // Use the appropriate vectors based on the `vertical` property
                 if (block.vertical) {
-                    // For vertical text, the main axis is along the shorter sides of the polygon
                     totalVecX += v_vec1.x + v_vec2.x;
                     totalVecY += v_vec1.y + v_vec2.y;
                 } else {
-                    // For horizontal text, the main axis is along the longer sides
                     totalVecX += h_vec1.x + h_vec2.x;
                     totalVecY += h_vec1.y + h_vec2.y;
                 }
@@ -1193,8 +1181,9 @@
             const mainAxisAngleRad = Math.atan2(totalVecY, totalVecX);
             let avgAngleDeg = mainAxisAngleRad * 180 / Math.PI;
 
-            if (avgAngleDeg > 90) avgAngleDeg -= 180;
-            if (avgAngleDeg < -90) avgAngleDeg += 180;
+            // REMOVED: Angle normalization. The angle will now be the raw calculated value.
+            // if (avgAngleDeg > 90) avgAngleDeg -= 180;
+            // if (avgAngleDeg < -90) avgAngleDeg += 180;
             
             block.angle = avgAngleDeg;
             const preciseAxisAngleRad = avgAngleDeg * Math.PI / 180;
