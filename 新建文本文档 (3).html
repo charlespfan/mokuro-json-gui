@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (相容性修正版)</title>
+    <title>JSON 標註互動式編輯工具 (漢字按鈕版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -132,16 +132,16 @@
         <div class="divider"></div>
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
-             <button id="replaceBtn" class="icon-btn" title="套用固定取代規則"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.18-3.185m-7.528 0l-3.182-3.182a8.25 8.25 0 0111.664 0l3.18 3.185" /></svg></button>
-             <button id="toggleTcyBtn" class="icon-btn" title="批次切換數字橫排"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v.01m0 3.49v.01m0 3.49v.01m0 3.49v.01m-4.5-.01H12a2.25 2.25 0 012.25 2.25V19.5h-4.5v-3.74a2.25 2.25 0 012.25-2.25z" /></svg></button>
-             <button id="batchAutoFontSizeBtn" class="icon-btn" title="所有页面自动字号"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg></button>
+             <button id="replaceBtn" class="char-btn" title="套用固定取代規則">替</button>
+             <button id="toggleTcyBtn" class="char-btn" title="批次切換數字橫排">叠</button>
+             <button id="batchAutoFontSizeBtn" class="char-btn" title="所有页面自动字号">字</button>
         </div>
 
         <div class="divider"></div>
 
         <div id="editPanel" class="flex items-center flex-nowrap gap-2 opacity-50 pointer-events-none">
             <button id="drawModeBtn" class="icon-btn" title="拖曳新增矩形框"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg></button>
-            <button id="autoFontSizeBtn" class="icon-btn" title="自動字號"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.5 21.75l-.398-1.188a3.375 3.375 0 00-2.924-2.924l-1.188-.398.398-1.188a3.375 3.375 0 002.924-2.924l1.188-.398-.398 1.188a3.375 3.375 0 002.924 2.924l1.188.398-.398 1.188a3.375 3.375 0 00-2.924 2.924z" /></svg></button>
+            <button id="autoFontSizeBtn" class="char-btn" title="自動字號">自</button>
             
             <button id="fitBlockBtn" class="char-btn" title="自適應外框" disabled>適</button>
             <button id="rectifyBtn" class="char-btn" title="矩形化">矩</button>
@@ -149,10 +149,10 @@
             <button id="mergeBtn" class="char-btn" title="合併 (0)" disabled>合</button>
             <button id="splitBtn" class="char-btn" title="拆分" disabled>拆</button>
 
-            <button id="editTextBtn" class="icon-btn" title="修改文字" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg></button>
-            <button id="editPropBtn" class="icon-btn" title="改屬性" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.998 15.998 0 013.388-1.62" /></svg></button>
-            <button id="editFontSizeBtn" class="icon-btn" title="改字號" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" /></svg></button>
-            <button id="setAngleBtn" class="icon-btn" title="設定角度" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 7.38m5.84-7.38l-5.84 7.38m5.84-7.38v4.82" /></svg></button>
+            <button id="editTextBtn" class="char-btn" title="修改文字" disabled>文</button>
+            <button id="editPropBtn" class="char-btn" title="改屬性" disabled>属</button>
+            <button id="editFontSizeBtn" class="char-btn" title="改字號" disabled>号</button>
+            <button id="setAngleBtn" class="char-btn" title="設定角度" disabled>角</button>
             <button id="changeCornersBtn" class="icon-btn" title="改变四角" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5 0V6.375c0-.621.504-1.125 1.125-1.125h4.125c.621 0 1.125.504 1.125 1.125V10.5m-4.5 0h4.5" /></svg></button>
             <button id="deleteBtn" class="icon-btn" title="刪除 (0)" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
         </div>
@@ -334,7 +334,6 @@
             setTimeout(adjustContentPadding, 100);
         }
         
-        // BUG FIX: Re-added the missing navigateFiles function
         function navigateFiles(direction) {
             if (matchedFiles.length === 0) return;
             const newIndex = currentFileIndex + direction;
@@ -347,7 +346,6 @@
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
-            // BUG FIX: Added robust checking for old JSON formats
             if (jsonData && jsonData.blocks && Array.isArray(jsonData.blocks)) {
                 jsonData.blocks.forEach(block => {
                     if (block && typeof block === 'object') {
@@ -384,7 +382,7 @@
         function applyFixedReplacements() {
             if (!jsonData) return;
             const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
-            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
+            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
                 let count = 0;
@@ -1235,7 +1233,7 @@
         }
         function isPointInPolygon(point, polygon) {
             let isInside = false;
-            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; i++) {
                 const xi = polygon[i].x, yi = polygon[i].y;
                 const xj = polygon[j].x, yj = polygon[j].y;
                 const intersect = ((yi > point.y) !== (yj > point.y)) && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
