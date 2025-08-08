@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (排序功能優化版)</title>
+    <title>JSON 標註互動式編輯工具 (批次匯出功能版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 JSZip 以建立 ZIP 檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -183,8 +185,11 @@
         </div>
 
         <div class="divider"></div>
-
-        <button id="exportBtn" class="text-btn text-btn-primary opacity-50 pointer-events-none">匯出 JSON</button>
+        
+        <div id="export-panel" class="flex items-center gap-2 opacity-50 pointer-events-none">
+            <button id="exportBtn" class="text-btn text-btn-primary">匯出 JSON</button>
+            <button id="exportAllBtn" class="text-btn text-btn-primary">匯出所有</button>
+        </div>
         
         <div class="flex-grow"></div>
         <div class="flex items-center gap-4 text-xs text-gray-400">
@@ -264,7 +269,9 @@
         const editFontSizeBtn = document.getElementById('editFontSizeBtn');
         const setAngleBtn = document.getElementById('setAngleBtn');
         const changeCornersBtn = document.getElementById('changeCornersBtn');
+        const exportPanel = document.getElementById('export-panel');
         const exportBtn = document.getElementById('exportBtn');
+        const exportAllBtn = document.getElementById('exportAllBtn');
 
         // Reorder Mode Elements
         const reorderToolbar = document.getElementById('reorder-toolbar');
@@ -312,6 +319,7 @@
         setAngleBtn.addEventListener('click', handleSetAngle);
         changeCornersBtn.addEventListener('click', toggleCornerEditMode);
         exportBtn.addEventListener('click', exportJson);
+        exportAllBtn.addEventListener('click', exportAllJsons);
         mainCanvas.addEventListener('mousedown', handleMouseDown);
         mainCanvas.addEventListener('mousemove', handleMouseMove);
         mainCanvas.addEventListener('mouseup', handleMouseUp);
@@ -473,7 +481,7 @@
                 });
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
                 preprocessPanel.classList.remove('opacity-50', 'pointer-events-none');
-                exportBtn.classList.remove('opacity-50', 'pointer-events-none');
+                exportPanel.classList.remove('opacity-50', 'pointer-events-none');
                 fileCounter.textContent = `${index + 1} / ${matchedFiles.length}`;
                 prevFileBtn.disabled = index === 0;
                 nextFileBtn.disabled = index === matchedFiles.length - 1;
@@ -1029,12 +1037,12 @@
             if (isReorderMode) {
                 reorderSequence = [];
                 resetSelectionAndRedraw(); 
-                editPanel.classList.add('opacity-50', 'pointer-events-none');
+                editPanel.classList.add('hidden');
                 reorderToolbar.classList.remove('hidden');
                 reorderToolbar.classList.add('flex');
             } else {
                 reorderSequence = [];
-                editPanel.classList.remove('opacity-50', 'pointer-events-none');
+                editPanel.classList.remove('hidden');
                 reorderToolbar.classList.add('hidden');
                 reorderToolbar.classList.remove('flex');
             }
@@ -1047,10 +1055,8 @@
 
             const sequenceIndex = reorderSequence.indexOf(clickedBlockIndex);
             if (sequenceIndex > -1) {
-                // If already in sequence, remove it (undo)
                 reorderSequence.splice(sequenceIndex, 1);
             } else {
-                // If not in sequence, add it
                 reorderSequence.push(clickedBlockIndex);
             }
             drawVisualizations();
@@ -1114,6 +1120,39 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        async function exportAllJsons() {
+            if (!matchedFiles || matchedFiles.length === 0) {
+                alert("沒有可匯出的資料！");
+                return;
+            }
+
+            if (!confirm(`您確定要匯出全部 ${matchedFiles.length} 個 JSON 檔案嗎？`)) {
+                return;
+            }
+
+            const zip = new JSZip();
+
+            matchedFiles.forEach(filePair => {
+                const jsonString = JSON.stringify(filePair.data, null, 2);
+                zip.file(filePair.jsonName, jsonString);
+            });
+
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'exported_jsons.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error("建立 ZIP 檔案時發生錯誤:", error);
+                alert("建立 ZIP 檔案時發生錯誤，請查看控制台以獲取詳細資訊。");
+            }
         }
         
         function handleRectify() {
