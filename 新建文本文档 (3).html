@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (字號邏輯修正版)</title>
+    <title>JSON 標註互動式編輯工具 (縦中横功能修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -445,7 +445,7 @@
         function applyFixedReplacements() {
             if (!jsonData) return;
             const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
-            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
+            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
                 let count = 0;
@@ -1252,15 +1252,13 @@
                     if (seg.tcy) {
                         const segmentHeight = fontSize;
                         const charY = currentY + segmentHeight / 2;
-                        for (let i = 0; i < seg.text.length; i++) {
-                            const char = seg.text[i];
-                            ctx.save();
-                            ctx.translate(0, charY);
-                            ctx.rotate(Math.PI / 2);
-                            ctx.strokeText(char, 0, 0);
-                            ctx.fillText(char, 0, 0);
-                            ctx.restore();
-                        }
+                        // LOGIC FIX: Draw TCY text horizontally without rotation
+                        ctx.save();
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.strokeText(seg.text, 0, charY);
+                        ctx.fillText(seg.text, 0, charY);
+                        ctx.restore();
                         currentY += segmentHeight;
                     } else {
                         for (const char of seg.text) {
