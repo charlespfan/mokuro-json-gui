@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (角度功能版)</title>
+    <title>JSON 標註互動式編輯工具 (新外框邏輯版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -179,7 +179,7 @@
         <main id="main-content">
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">已新增角度編輯功能。</p>
+                <p class="mt-2 text-lg text-gray-400">已新增角度編輯功能 (新外框邏輯版)。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -1131,7 +1131,7 @@
             const handles = rotatedCorners.map(p => ({ x: p.x + center.x, y: p.y + center.y, type: 'scale-block', index: p.index }));
             const topCenter = { x: 0, y: -height / 2 };
             const rotatedTopCenter = rotatePoint(topCenter, {x:0,y:0}, block.angle);
-            handles.push({ x: rotatedTopCenter.x + center.x, y: rotatedTopCenter.y + center.y - 25, type: 'rotate-block' });
+            handles.push({ x: rotatedTopCenter.x + center.x, y: rotatedTopCenter.y - 25, type: 'rotate-block' });
             return handles;
         }
         function rotatePoint(point, center, angleDegrees) {
@@ -1149,51 +1149,99 @@
                 return [rotated.x, rotated.y];
             });
         }
+        
+        /**
+         * NEW IMPLEMENTATION based on user's logic.
+         * Recalculates the bounding box for a block based on its contained lines.
+         * This version uses the "main axis projection" method.
+         */
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
-                block.box = [0,0,0,0];
+                block.box = [0, 0, 0, 0];
                 block.angle = 0;
                 return;
-            };
-            let allPoints = [], totalAngle = 0, angleCount = 0;
+            }
+
+            // --- Step 1: Calculate a robust average angle (the "main axis") ---
+            let allPoints = [];
+            let totalVecX = 0;
+            let totalVecY = 0;
+
             block.lines_coords.forEach(poly => {
-                allPoints.push(...poly.map(p => ({x: p[0], y: p[1]})));
-                for(let i = 0; i < poly.length; i++) {
-                    const p1 = poly[i], p2 = poly[(i+1) % poly.length];
-                    const dist = distance(p1, p2);
-                    if (dist > 10) { // Only consider longer edges for angle calculation
-                        totalAngle += Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
-                        angleCount++;
-                    }
+                allPoints.push(...poly.map(p => ({ x: p[0], y: p[1] })));
+
+                // Assuming a 4-point polygon from OCR
+                const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
+
+                // Determine the two longer, roughly parallel sides to find the text direction
+                const len_p0p1 = distance(p0, p1);
+                const len_p1p2 = distance(p1, p2);
+
+                let angle1, angle2;
+                if (len_p0p1 > len_p1p2) { // p0-p1 and p2-p3 are the longer sides (horizontal-ish text)
+                    angle1 = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+                    angle2 = Math.atan2(p2[1] - p3[1], p2[0] - p3[0]);
+                } else { // p1-p2 and p3-p0 are the longer sides (vertical-ish text)
+                    angle1 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+                    angle2 = Math.atan2(p3[1] - p0[1], p3[0] - p0[0]);
                 }
+                
+                // Average the vectors of the two main sides to get a robust angle for this line
+                totalVecX += Math.cos(angle1) + Math.cos(angle2);
+                totalVecY += Math.sin(angle1) + Math.sin(angle2);
             });
-            let avgAngleRad = angleCount > 0 ? totalAngle / angleCount : 0;
-            let avgAngleDeg = avgAngleRad * 180 / Math.PI;
-            // Normalize angle to be primarily horizontal or vertical
-            avgAngleDeg = avgAngleDeg % 180;
+
+            const mainAxisAngleRad = Math.atan2(totalVecY, totalVecX);
+            let avgAngleDeg = mainAxisAngleRad * 180 / Math.PI;
+
+            // Normalize angle to the smallest representation (-90 to 90 degrees) for consistency
             if (avgAngleDeg > 90) avgAngleDeg -= 180;
             if (avgAngleDeg < -90) avgAngleDeg += 180;
-            block.angle = avgAngleDeg;
             
-            const centroid = allPoints.reduce((acc, p) => ({x: acc.x + p.x, y: acc.y + p.y}), {x:0, y:0});
-            centroid.x /= allPoints.length;
-            centroid.y /= allPoints.length;
+            block.angle = avgAngleDeg;
+            // Use the calculated radian angle for precision in the next steps
+            const preciseAxisAngleRad = avgAngleDeg * Math.PI / 180;
 
-            const rotatedPoints = allPoints.map(p => rotatePoint(p, centroid, -block.angle));
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            rotatedPoints.forEach(p => {
-                minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+            // --- Step 2: Define main axis and its perpendicular axis ---
+            const axisX = { x: Math.cos(preciseAxisAngleRad), y: Math.sin(preciseAxisAngleRad) };
+            const axisY = { x: -axisX.y, y: axisX.x }; // Perpendicular vector
+
+            // --- Step 3: Project all points onto these axes to find the min/max extent ---
+            let minProjX = Infinity, maxProjX = -Infinity;
+            let minProjY = Infinity, maxProjY = -Infinity;
+
+            allPoints.forEach(p => {
+                // Project onto main axis (dot product)
+                const projX = p.x * axisX.x + p.y * axisX.y;
+                minProjX = Math.min(minProjX, projX);
+                maxProjX = Math.max(maxProjX, projX);
+
+                // Project onto perpendicular axis (dot product)
+                const projY = p.x * axisY.x + p.y * axisY.y;
+                minProjY = Math.min(minProjY, projY);
+                maxProjY = Math.max(maxProjY, projY);
             });
-            const rotatedCenter = { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 };
-            const finalCenter = rotatePoint(rotatedCenter, centroid, block.angle);
-            const width = maxX - minX;
-            const height = maxY - minY;
+
+            // --- Step 4: Calculate the center and dimensions of the box in the projected space ---
+            const centerProjX = (minProjX + maxProjX) / 2;
+            const centerProjY = (minProjY + maxProjY) / 2;
+            const width = maxProjX - minProjX;
+            const height = maxProjY - minProjY;
+
+            // --- Step 5: Convert the projected center back to the original coordinate system ---
+            // This gives the true center of the final oriented bounding box.
+            const finalCenterX = centerProjX * axisX.x + centerProjY * axisY.x;
+            const finalCenterY = centerProjX * axisX.y + centerProjY * axisY.y;
+
+            // --- Step 6: Store the final box properties ---
+            // `block.box` stores an un-rotated, axis-aligned bounding box.
+            // The renderer will use this box's dimensions, its center, and the `block.angle`
+            // to draw the correctly oriented box on the canvas.
             block.box = [
-                finalCenter.x - width / 2,
-                finalCenter.y - height / 2,
-                finalCenter.x + width / 2,
-                finalCenter.y + height / 2,
+                finalCenterX - width / 2,
+                finalCenterY - height / 2,
+                finalCenterX + width / 2,
+                finalCenterY + height / 2,
             ];
         }
     </script>
