@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (手動排序功能版)</title>
+    <title>JSON 標註互動式編輯工具 (排序功能優化版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -170,8 +170,7 @@
         </div>
         
         <div id="reorder-toolbar" class="hidden items-center gap-3">
-            <span class="text-sm font-bold text-yellow-400">排序模式：請依序點擊區塊以設定新順序。</span>
-            <button id="reorderConfirmBtn" class="text-btn text-btn-green">✅ 完成</button>
+            <button id="reorderConfirmBtn" class="text-btn text-btn-green">✅ 完成排序</button>
             <button id="reorderCancelBtn" class="text-btn text-btn-red">❌ 取消</button>
         </div>
 
@@ -1021,25 +1020,19 @@
                 resetSelectionAndRedraw();
             }
         }
-
-        // ====================================================================
-        // START: NEW REORDER FUNCTIONS
-        // ====================================================================
-
+        
         function toggleReorderMode() {
             isReorderMode = !isReorderMode;
             reorderBtn.classList.toggle('active', isReorderMode);
             mainCanvas.parentElement.parentElement.classList.toggle('reorder-mode', isReorderMode);
             
             if (isReorderMode) {
-                // Enter reorder mode
                 reorderSequence = [];
-                resetSelectionAndRedraw(); // Clear any active selections
+                resetSelectionAndRedraw(); 
                 editPanel.classList.add('opacity-50', 'pointer-events-none');
                 reorderToolbar.classList.remove('hidden');
                 reorderToolbar.classList.add('flex');
             } else {
-                // Exit reorder mode (Cancel)
                 reorderSequence = [];
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
                 reorderToolbar.classList.add('hidden');
@@ -1050,27 +1043,32 @@
 
         function handleReorderClick(pos) {
             const clickedBlockIndex = findBlockAt(pos);
-            if (clickedBlockIndex !== -1 && !reorderSequence.includes(clickedBlockIndex)) {
+            if (clickedBlockIndex === -1) return;
+
+            const sequenceIndex = reorderSequence.indexOf(clickedBlockIndex);
+            if (sequenceIndex > -1) {
+                // If already in sequence, remove it (undo)
+                reorderSequence.splice(sequenceIndex, 1);
+            } else {
+                // If not in sequence, add it
                 reorderSequence.push(clickedBlockIndex);
-                drawVisualizations();
             }
+            drawVisualizations();
         }
 
         function applyReorder() {
             if (reorderSequence.length === 0) {
-                toggleReorderMode(); // Just exit if nothing was clicked
+                toggleReorderMode();
                 return;
             }
 
             const newBlocks = [];
             const reorderedIndicesSet = new Set(reorderSequence);
 
-            // Add the reordered blocks first, in the new sequence
             reorderSequence.forEach(originalIndex => {
                 newBlocks.push(jsonData.blocks[originalIndex]);
             });
 
-            // Add the remaining blocks that were not reordered
             jsonData.blocks.forEach((block, index) => {
                 if (!reorderedIndicesSet.has(index)) {
                     newBlocks.push(block);
@@ -1078,7 +1076,7 @@
             });
 
             jsonData.blocks = newBlocks;
-            toggleReorderMode(); // This will also redraw
+            toggleReorderMode();
         }
         
         function findBlockAt(pos) {
@@ -1087,16 +1085,12 @@
                 if (!block.lines_coords) continue;
                 for (let j = 0; j < block.lines_coords.length; j++) {
                     if (isPointInPolygon(pos, block.lines_coords[j])) {
-                        return i; // Return the block index
+                        return i;
                     }
                 }
             }
-            return -1; // No block found
+            return -1;
         }
-        
-        // ====================================================================
-        // END: NEW REORDER FUNCTIONS
-        // ====================================================================
 
         function resetSelectionAndRedraw() {
             selectedLines = [];
@@ -1364,7 +1358,6 @@
                     });
                 }
                 
-                // Draw reorder labels if in reorder mode
                 if (isReorderMode) {
                     const reorderIndex = reorderSequence.indexOf(blockIndex);
                     if (reorderIndex !== -1) {
@@ -1373,7 +1366,7 @@
                         const labelY = y1;
                         const labelSize = 12 * scaleFactor;
 
-                        ctx.fillStyle = 'rgba(251, 191, 36, 0.9)'; // Amber color
+                        ctx.fillStyle = 'rgba(251, 191, 36, 0.9)';
                         ctx.beginPath();
                         ctx.arc(labelX, labelY, labelSize, 0, 2 * Math.PI);
                         ctx.fill();
