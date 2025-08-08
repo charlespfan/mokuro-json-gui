@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSON 標註互動式編輯工具 (點擊修正版)</title>
-    <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
@@ -194,14 +192,12 @@
         </main>
     </div>
 
-    <!-- Custom Modal for Text Editing -->
     <div id="textEditModal" class="fixed inset-0 items-center justify-center hidden">
         <div class="card p-6 w-full max-w-md">
             <h3 class="text-lg font-bold mb-4">修改文字</h3>
             <input type="text" id="textModalInput" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
             <div id="symbolButtons" class="flex gap-2 mb-4">
-                <!-- Symbol buttons will be generated here by JS -->
-            </div>
+                </div>
             <div class="flex justify-end gap-3">
                 <button id="textModalCancel" class="text-btn bg-gray-600 hover:bg-gray-500">取消</button>
                 <button id="textModalOk" class="text-btn text-btn-primary">確定</button>
@@ -830,56 +826,87 @@
             recalculateBoxForBlock(block);
             drawVisualizations();
         }
+        
+        // ====================================================================
+        // START: Modified function
+        // ====================================================================
         function splitSelectedLines() {
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex === -1 || selectedLines.length === 0) {
                 alert("請選擇來自同一個區塊的一個或多個文字行進行拆分。");
                 return;
             }
-            const originalBlock = jsonData.blocks[selectedBlockIndex];
-            const newBlocks = [];
-            const indicesToRemove = selectedLines.map(sel => sel.lineIndex).sort((a, b) => b - a);
 
-            indicesToRemove.forEach(lineIndex => {
-                const lineText = originalBlock.lines[lineIndex];
-                const lineCoords = originalBlock.lines_coords[lineIndex];
-                const newBlock = { 
-                    ...JSON.parse(JSON.stringify(originalBlock)),
-                    lines: [lineText], 
-                    lines_coords: [lineCoords], 
-                    box: [] 
+            const originalBlock = jsonData.blocks[selectedBlockIndex];
+            // 建立一個包含所有原始 line 索引的陣列
+            const allLineIndices = Array.from({ length: originalBlock.lines.length }, (_, i) => i);
+            // 建立一個 Set 以便快速查找哪些 line 被選中要拆分
+            const splitIndicesSet = new Set(selectedLines.map(sel => sel.lineIndex));
+            // 篩選出要保留在原區塊的 line 的索引
+            const remainingIndices = allLineIndices.filter(i => !splitIndicesSet.has(i));
+
+            const sortedGroups = [];
+
+            // 步驟 1: 處理「保留下來的 line」群組
+            if (remainingIndices.length > 0) {
+                const newLines = remainingIndices.map(i => originalBlock.lines[i]);
+                const newLinesCoords = remainingIndices.map(i => originalBlock.lines_coords[i]);
+                
+                // 建立一個新的 block 物件來代表這個保留下來的群組
+                const newBlock = {
+                    ...JSON.parse(JSON.stringify(originalBlock)), // 深拷貝以繼承屬性
+                    lines: newLines,
+                    lines_coords: newLinesCoords,
+                    box: [] // 外框需要重新計算
                 };
                 recalculateBoxForBlock(newBlock);
-                newBlocks.push(newBlock);
-            });
 
-            indicesToRemove.forEach(lineIndex => {
-                originalBlock.lines.splice(lineIndex, 1);
-                originalBlock.lines_coords.splice(lineIndex, 1);
-            });
-
-            if (originalBlock.lines.length === 0) {
-                jsonData.blocks.splice(selectedBlockIndex, 1);
-            } else {
-                recalculateBoxForBlock(originalBlock);
+                // 將這個群組加入待排序列表，其排序依據是它包含的第一個 line 的原始索引
+                sortedGroups.push({
+                    minIndex: remainingIndices[0],
+                    blockData: newBlock
+                });
             }
 
-            jsonData.blocks.push(...newBlocks);
+            // 步驟 2: 處理每一個「被拆分的 line」作為獨立的新群組
+            splitIndicesSet.forEach(lineIndex => {
+                const lineText = originalBlock.lines[lineIndex];
+                const lineCoords = originalBlock.lines_coords[lineIndex];
+                
+                // 為這個單獨的 line 建立一個新的 block 物件
+                const newBlock = {
+                    ...JSON.parse(JSON.stringify(originalBlock)),
+                    lines: [lineText],
+                    lines_coords: [lineCoords],
+                    box: []
+                };
+                recalculateBoxForBlock(newBlock);
 
-            const newSelection = [];
-            newBlocks.forEach(nb => {
-                const newBlockIndex = jsonData.blocks.indexOf(nb);
-                if (newBlockIndex !== -1) {
-                    newSelection.push({ blockIndex: newBlockIndex, lineIndex: 0 });
-                }
+                // 將這個群組加入待排序列表，其排序依據就是它自己的原始索引
+                sortedGroups.push({
+                    minIndex: lineIndex,
+                    blockData: newBlock
+                });
             });
 
-            selectedLines = newSelection;
-            activeTarget = selectedLines.length > 0 ? selectedLines[0] : null;
+            // 步驟 3: 根據 minIndex (原始 line 的順序) 對所有群組進行排序
+            sortedGroups.sort((a, b) => a.minIndex - b.minIndex);
 
-            updateActionButtons();
-            drawVisualizations();
+            // 步驟 4: 從排序好的群組中，提取出最終的 block 物件序列
+            const finalNewBlocks = sortedGroups.map(group => group.blockData);
+
+            // 步驟 5: 使用 splice 將原始區塊替換為新產生的區塊序列
+            // 第一個參數是起始索引，第二個是刪除數量(1代表刪除原始區塊)
+            // 後續參數是所有要插入的新元素
+            jsonData.blocks.splice(selectedBlockIndex, 1, ...finalNewBlocks);
+            
+            // 步驟 6: 重設選擇狀態並重繪 UI
+            resetSelectionAndRedraw();
         }
+        // ====================================================================
+        // END: Modified function
+        // ====================================================================
+        
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
             const linesToMerge = selectedLines.map(sel => ({
