@@ -333,9 +333,21 @@
             batchNav.classList.add('flex');
             setTimeout(adjustContentPadding, 100);
         }
+        
+        // BUG FIX: Re-added the missing navigateFiles function
+        function navigateFiles(direction) {
+            if (matchedFiles.length === 0) return;
+            const newIndex = currentFileIndex + direction;
+            if (newIndex >= 0 && newIndex < matchedFiles.length) {
+                currentFileIndex = newIndex;
+                loadFile(currentFileIndex);
+            }
+        }
+
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
+            // BUG FIX: Added robust checking for old JSON formats
             if (jsonData && jsonData.blocks && Array.isArray(jsonData.blocks)) {
                 jsonData.blocks.forEach(block => {
                     if (block && typeof block === 'object') {
@@ -372,7 +384,7 @@
         function applyFixedReplacements() {
             if (!jsonData) return;
             const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
-            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"]];
+            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
                 let count = 0;
