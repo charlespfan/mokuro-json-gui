@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (選中邏輯修正版)</title>
+    <title>JSON 標註互動式編輯工具 (字號高亮版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -311,7 +311,7 @@
                 textEditModal.classList.add('hidden');
                 textEditModal.classList.remove('flex');
                 currentLineEdit = null;
-                drawVisualizations(); // LOGIC FIX: Only redraw, don't reset selection
+                drawVisualizations();
             }
         });
 
@@ -749,7 +749,7 @@
             editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleLineSelected;
+            setAngleBtn.disabled = !isSingleBlockSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -791,7 +791,7 @@
                 const parsedSize = parseFloat(newSize);
                 if (!isNaN(parsedSize) && parsedSize > 0) {
                     block.font_size = parsedSize;
-                    drawVisualizations(); // LOGIC FIX: Only redraw
+                    drawVisualizations();
                 } else {
                     alert("請輸入有效的數字！");
                 }
@@ -821,7 +821,7 @@
                 });
                 block.font_size = parseFloat(minFontSize.toFixed(2));
             });
-            drawVisualizations(); // LOGIC FIX: Only redraw
+            drawVisualizations();
         }
         function fitSelectedBlockToLines() {
             const blockIndex = getSelectedBlockIndex();
@@ -866,7 +866,6 @@
 
             jsonData.blocks.push(...newBlocks);
 
-            // LOGIC FIX: Reselect the newly created lines
             const newSelection = [];
             newBlocks.forEach(nb => {
                 const newBlockIndex = jsonData.blocks.indexOf(nb);
@@ -1034,6 +1033,26 @@
             const selectedBlockIndex = getSelectedBlockIndex();
             jsonData.blocks.forEach((block, blockIndex) => {
                 const isBlockActive = (selectedBlockIndex === blockIndex);
+
+                let minFontSize = Infinity;
+                let maxFontSize = -Infinity;
+                let minFontSizeIndex = -1;
+                let maxFontSizeIndex = -1;
+
+                if (isBlockActive && block.lines_coords.length > 1) {
+                    block.lines_coords.forEach((linePolygon, lineIndex) => {
+                        const size = calculateAutoFontSize(block.lines[lineIndex], linePolygon, block);
+                        if (size < minFontSize) {
+                            minFontSize = size;
+                            minFontSizeIndex = lineIndex;
+                        }
+                        if (size > maxFontSize) {
+                            maxFontSize = size;
+                            maxFontSizeIndex = lineIndex;
+                        }
+                    });
+                }
+
                 if (showBlocks && block.box && block.box.length === 4) {
                     const [x1, y1, x2, y2] = block.box;
                     const width = x2 - x1;
@@ -1087,8 +1106,30 @@
                         const isMultiSelected = selectedLines.some(sel => sel.blockIndex === blockIndex && sel.lineIndex === lineIndex);
                         const isActiveTarget = activeTarget && activeTarget.blockIndex === blockIndex && activeTarget.lineIndex === lineIndex;
                         if (showLines) {
-                            ctx.strokeStyle = isActiveTarget ? '#ef4444' : (isMultiSelected ? '#facc15' : '#3b82f6');
-                            ctx.lineWidth = ((isActiveTarget || isMultiSelected) ? 4 : 2) * scaleFactor;
+                            let strokeColor = '#3b82f6';
+                            let lineWidth = 2 * scaleFactor;
+
+                            if (isBlockActive) {
+                                if (lineIndex === maxFontSizeIndex) {
+                                    strokeColor = '#c084fc'; // Purple
+                                    lineWidth = 4 * scaleFactor;
+                                } else if (lineIndex === minFontSizeIndex) {
+                                    strokeColor = '#f472b6'; // Pink
+                                    lineWidth = 4 * scaleFactor;
+                                }
+                            }
+
+                            if (isMultiSelected) {
+                                strokeColor = '#facc15'; // Yellow
+                                lineWidth = 4 * scaleFactor;
+                            }
+                            if (isActiveTarget) {
+                                strokeColor = '#ef4444'; // Red
+                                lineWidth = 4 * scaleFactor;
+                            }
+                            
+                            ctx.strokeStyle = strokeColor;
+                            ctx.lineWidth = lineWidth;
                             ctx.beginPath();
                             ctx.moveTo(linePolygon[0][0], linePolygon[0][1]);
                             for (let i = 1; i < linePolygon.length; i++) ctx.lineTo(linePolygon[i][0], linePolygon[i][1]);
