@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終修正版)</title>
+    <title>JSON 標註互動式編輯工具 (顯示Line角度版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -144,7 +144,7 @@
             
             <button id="fitBlockBtn" class="char-btn" title="自適應外框" disabled>適</button>
             <button id="rectifyBtn" class="char-btn" title="矩形化">矩</button>
-            <button id="straightenBtn" class="char-btn" title="扶正 (角度歸零)">扶</button>
+            <button id="straightenBtn" class="char-btn" title="扶正">扶</button>
             <button id="mergeBtn" class="char-btn" title="合併 (0)" disabled>合</button>
             <button id="splitBtn" class="char-btn" title="拆分" disabled>拆</button>
 
@@ -816,26 +816,30 @@
         }
         
         /**
-         * LOGIC FIX: "Straighten" (扶正) now straightens the individual lines
-         * within the selected block, then recalculates the block's bounding box.
+         * LOGIC FIX: "Straighten" (扶正) now applies the block's rotation to its
+         * inner lines and then resets the block's angle to 0.
          */
         function handleStraighten() {
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex === -1) return;
             
             const block = jsonData.blocks[selectedBlockIndex];
+            const angleToCorrectRad = block.angle * Math.PI / 180;
             
-            // Iterate through each line in the block and straighten it
+            // If the block is already straight, do nothing.
+            if (Math.abs(block.angle) < 0.01) return;
+
+            const center = getBoxCenter(block.box);
+            
+            // Apply the block's rotation to all inner lines
             block.lines_coords = block.lines_coords.map(polygon => {
-                const p0 = polygon[0], p1 = polygon[1];
-                const angleRad = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
-                const center = getPolygonCenter(polygon);
-                
-                // Rotate the polygon by its negative angle to make it horizontal
-                return rotatePolygon(polygon, center, -angleRad);
+                return rotatePolygon(polygon, center, angleToCorrectRad);
             });
             
-            // After straightening all lines, recalculate the outer box to fit them
+            // Reset the block's own angle to 0
+            block.angle = 0;
+            
+            // Recalculate the box to tightly fit the newly rotated lines
             recalculateBoxForBlock(block);
             
             drawVisualizations();
@@ -957,6 +961,27 @@
                             ctx.closePath();
                             ctx.stroke();
                         }
+                        
+                        // NEW FEATURE: Display angle for the active line
+                        if (isActiveTarget) {
+                            const p0 = linePolygon[0];
+                            const p1 = linePolygon[1];
+                            const angleRad = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+                            const angleDeg = angleRad * 180 / Math.PI;
+                            const angleText = `L: ${angleDeg.toFixed(1)}°`;
+
+                            const fontSizeLabel = Math.max(14, Math.round((block.font_size || 20) / 2.2));
+                            ctx.font = `bold ${fontSizeLabel}px "Noto Sans JP", sans-serif`;
+                            ctx.fillStyle = '#facc15'; // Yellow color for line angle
+                            ctx.lineWidth = 3 * scaleFactor;
+                            ctx.strokeStyle = 'black';
+                            
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'bottom';
+                            ctx.strokeText(angleText, p0[0], p0[1] - (5 * scaleFactor));
+                            ctx.fillText(angleText, p0[0], p0[1] - (5 * scaleFactor));
+                        }
+
                         if (showText) {
                             drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size, scaleFactor);
                         }
@@ -1204,7 +1229,6 @@
             const mainAxisAngleRad = Math.atan2(totalVecY, totalVecX);
             let avgAngleDeg = mainAxisAngleRad * 180 / Math.PI;
             
-            // LOGIC FIX: Re-added angle normalization for the outer box
             if (avgAngleDeg > 90) avgAngleDeg -= 180;
             if (avgAngleDeg < -90) avgAngleDeg += 180;
             
