@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (扶正/矩形化邏輯修正版)</title>
+    <title>JSON 標註互動式編輯工具 (0度鎖定版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -1215,27 +1215,32 @@
                 return;
             }
 
-            let allPoints = [];
-            let totalBaselineVecX = 0;
-            let totalBaselineVecY = 0;
+            const isInitiallyStraight = Math.abs(block.angle) < 0.01;
+            let finalAngleDeg = 0;
 
+            if (!isInitiallyStraight) {
+                let totalBaselineVecX = 0;
+                let totalBaselineVecY = 0;
+                block.lines_coords.forEach(poly => {
+                    const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
+                    const baseline_vec1 = { x: p1[0] - p0[0], y: p1[1] - p0[1] };
+                    const baseline_vec2 = { x: p2[0] - p3[0], y: p2[1] - p3[1] };
+                    totalBaselineVecX += baseline_vec1.x + baseline_vec2.x;
+                    totalBaselineVecY += baseline_vec1.y + baseline_vec2.y;
+                });
+                const baselineAngleRad = Math.atan2(totalBaselineVecY, totalBaselineVecX);
+                let baselineAngleDeg = baselineAngleRad * 180 / Math.PI;
+                if (baselineAngleDeg > 90) baselineAngleDeg -= 180;
+                if (baselineAngleDeg < -90) baselineAngleDeg += 180;
+                finalAngleDeg = baselineAngleDeg;
+            }
+            
+            block.angle = finalAngleDeg;
+
+            let allPoints = [];
             block.lines_coords.forEach(poly => {
                 allPoints.push(...poly.map(p => ({ x: p[0], y: p[1] })));
-                const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
-                
-                const baseline_vec1 = { x: p1[0] - p0[0], y: p1[1] - p0[1] };
-                const baseline_vec2 = { x: p2[0] - p3[0], y: p2[1] - p3[1] };
-                
-                totalBaselineVecX += baseline_vec1.x + baseline_vec2.x;
-                totalBaselineVecY += baseline_vec1.y + baseline_vec2.y;
             });
-
-            const baselineAngleRad = Math.atan2(totalBaselineVecY, totalBaselineVecX);
-            let baselineAngleDeg = baselineAngleRad * 180 / Math.PI;
-
-            if (baselineAngleDeg > 90) baselineAngleDeg -= 180;
-            if (baselineAngleDeg < -90) baselineAngleDeg += 180;
-            block.angle = baselineAngleDeg;
 
             const center = allPoints.reduce((acc, p) => ({x: acc.x + p.x, y: acc.y + p.y}), {x:0, y:0});
             center.x /= allPoints.length;
