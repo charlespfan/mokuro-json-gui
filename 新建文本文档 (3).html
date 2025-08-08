@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (0度鎖定版)</title>
+    <title>JSON 標註互動式編輯工具 (最終顯示修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -648,7 +648,7 @@
             editPropBtn.disabled = !isSingleLineSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleBlockSelected;
+            setAngleBtn.disabled = !isSingleLineSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -807,10 +807,6 @@
             URL.revokeObjectURL(url);
         }
         
-        /**
-         * LOGIC FIX: Rectify now applies to selected lines, or all lines if none are selected.
-         * It does NOT trigger recalculateBoxForBlock.
-         */
         function handleRectify() {
             if (!jsonData) return;
             const targets = getTargetLines();
@@ -826,10 +822,6 @@
             drawVisualizations();
         }
         
-        /**
-         * LOGIC FIX: Straighten now means: 1. Rectify the line, 2. Set its angle to 0.
-         * It does NOT trigger recalculateBoxForBlock.
-         */
         function handleStraighten() {
             if (!jsonData) return;
             const targets = getTargetLines();
@@ -839,20 +831,12 @@
                 const block = jsonData.blocks[target.blockIndex];
                 const lineIndex = target.lineIndex;
                 const originalPolygon = block.lines_coords[lineIndex];
-
-                // Step 1: Rectify the polygon first.
                 const rectifiedPolygon = rectifyPolygon(originalPolygon);
-
-                // Step 2: Calculate the angle of the now-perfect rectangle.
                 const p0 = rectifiedPolygon[0];
                 const p1 = rectifiedPolygon[1];
                 const angleRad = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
-
-                // Step 3: Rotate it by its negative angle to make it horizontal (angle 0).
                 const center = getPolygonCenter(rectifiedPolygon);
                 const straightenedPolygon = rotatePolygon(rectifiedPolygon, center, -angleRad);
-
-                // Update the line's coordinates.
                 block.lines_coords[lineIndex] = straightenedPolygon;
             });
 
@@ -940,7 +924,14 @@
                     ctx.fillStyle = 'white';
                     ctx.lineWidth = 3 * scaleFactor;
                     ctx.strokeStyle = 'black';
-                    const labelContent = `A: ${block.angle.toFixed(1)}°`;
+                    
+                    // LOGIC FIX: Conditional label display
+                    let labelParts = [`[${blockIndex}]`, `F: ${block.font_size || 'N/A'}`];
+                    if (Math.abs(block.angle) > 0.01) {
+                        labelParts.push(`A: ${block.angle.toFixed(1)}°`);
+                    }
+                    const labelContent = labelParts.join(' ');
+
                     ctx.strokeText(labelContent, -width/2, -height/2 - (10 * scaleFactor));
                     ctx.fillText(labelContent, -width/2, -height/2 - (10 * scaleFactor));
                     
