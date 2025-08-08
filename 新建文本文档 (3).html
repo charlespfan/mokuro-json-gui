@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (一鍵處理功能版)</title>
+    <title>JSON 標註互動式編輯工具 (全自動一鍵處理版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 JSZip 以建立 ZIP 檔案 -->
@@ -303,9 +303,9 @@
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
         batchProcessBtn.addEventListener('click', runBatchProcess);
-        replaceBtn.addEventListener('click', applyFixedReplacements);
-        toggleTcyBtn.addEventListener('click', handleToggleTcy);
-        batchAutoFontSizeBtn.addEventListener('click', batchAutoSetFontSize);
+        replaceBtn.addEventListener('click', () => applyFixedReplacements());
+        toggleTcyBtn.addEventListener('click', () => handleToggleTcy());
+        batchAutoFontSizeBtn.addEventListener('click', () => batchAutoSetFontSize());
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
@@ -500,19 +500,17 @@
                 alert("请先载入文件！");
                 return;
             }
-
-            alert("即将开始一键处理流程：\n1. 固定规则替换\n2. 数字横排设定\n3. 批量自动字号\n\n您将需要为每个步骤进行确认。");
             
-            applyFixedReplacements();
-            handleToggleTcy();
-            batchAutoSetFontSize();
+            applyFixedReplacements(true); // isSilent = true
+            handleToggleTcy(true); // isSilent = true
+            batchAutoSetFontSize(true); // isSilent = true
 
             alert("一键处理流程已执行完毕。");
         }
 
-        function applyFixedReplacements() {
+        function applyFixedReplacements(isSilent = false) {
             if (!jsonData) return;
-            const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
+            const scope = isSilent ? true : confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
             const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
@@ -536,14 +534,16 @@
                 const replacementsCount = processJson(jsonData);
                 if (replacementsCount > 0) { totalReplacements = replacementsCount; filesAffected = 1; }
             }
-            alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
+            if (!isSilent) {
+                alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
+            }
             drawVisualizations();
         }
         
-        function handleToggleTcy() {
+        function handleToggleTcy(isSilent = false) {
             if (!jsonData) return;
-            const enableTcy = confirm("您希望 [开启] 数字横排功能吗？\n(按“取消”则为关闭)");
-            const applyGlobally = confirm(`您要如何套用设定？\n\n[确定] = 套用到所有 ${matchedFiles.length} 个已载入的页面\n[取消] = 仅套用到当前页面`);
+            const enableTcy = isSilent ? true : confirm("您希望 [开启] 数字横排功能吗？\n(按“取消”则为关闭)");
+            const applyGlobally = isSilent ? true : confirm(`您要如何套用设定？\n\n[确定] = 套用到所有 ${matchedFiles.length} 个已载入的页面\n[取消] = 仅套用到当前页面`);
 
             let blocksAffected = 0;
             let filesAffected = 0;
@@ -566,14 +566,20 @@
                 processData(jsonData);
                 filesAffected = 1;
             }
-
-            alert(`处理完成！\n已为 ${filesAffected} 个档案中的 ${blocksAffected} 个区块${enableTcy ? '开启' : '关闭'}了数字横排功能。`);
+            if (!isSilent) {
+                alert(`处理完成！\n已为 ${filesAffected} 个档案中的 ${blocksAffected} 个区块${enableTcy ? '开启' : '关闭'}了数字横排功能。`);
+            }
             drawVisualizations();
         }
 
-        function batchAutoSetFontSize() {
-            if (!matchedFiles || matchedFiles.length === 0) { alert("请先载入文件！"); return; }
-            if (!confirm(`确定要为所有 ${matchedFiles.length} 个页面的所有区块自动设定字号吗？此操作不可撤销。`)) { return; }
+        function batchAutoSetFontSize(isSilent = false) {
+            if (!matchedFiles || matchedFiles.length === 0) { 
+                if (!isSilent) alert("请先载入文件！"); 
+                return; 
+            }
+            if (!isSilent && !confirm(`确定要为所有 ${matchedFiles.length} 个页面的所有区块自动设定字号吗？此操作不可撤销。`)) { 
+                return; 
+            }
             let blocksProcessed = 0;
             matchedFiles.forEach(pair => {
                 const data = pair.data;
@@ -591,7 +597,9 @@
                     });
                 }
             });
-            alert(`处理完成！共为 ${matchedFiles.length} 个页面的 ${blocksProcessed} 个区块自动设定了字号。`);
+            if (!isSilent) {
+                alert(`处理完成！共为 ${matchedFiles.length} 个页面的 ${blocksProcessed} 个区块自动设定了字号。`);
+            }
             drawVisualizations();
         }
         function toggleDrawMode() {
