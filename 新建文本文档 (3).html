@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSON 標註互動式編輯工具 (點擊修正版)</title>
+    <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
@@ -192,12 +194,14 @@
         </main>
     </div>
 
+    <!-- Custom Modal for Text Editing -->
     <div id="textEditModal" class="fixed inset-0 items-center justify-center hidden">
         <div class="card p-6 w-full max-w-md">
             <h3 class="text-lg font-bold mb-4">修改文字</h3>
             <input type="text" id="textModalInput" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
             <div id="symbolButtons" class="flex gap-2 mb-4">
-                </div>
+                <!-- Symbol buttons will be generated here by JS -->
+            </div>
             <div class="flex justify-end gap-3">
                 <button id="textModalCancel" class="text-btn bg-gray-600 hover:bg-gray-500">取消</button>
                 <button id="textModalOk" class="text-btn text-btn-primary">確定</button>
@@ -827,9 +831,6 @@
             drawVisualizations();
         }
         
-        // ====================================================================
-        // START: Modified function
-        // ====================================================================
         function splitSelectedLines() {
             const selectedBlockIndex = getSelectedBlockIndex();
             if (selectedBlockIndex === -1 || selectedLines.length === 0) {
@@ -838,42 +839,31 @@
             }
 
             const originalBlock = jsonData.blocks[selectedBlockIndex];
-            // 建立一個包含所有原始 line 索引的陣列
             const allLineIndices = Array.from({ length: originalBlock.lines.length }, (_, i) => i);
-            // 建立一個 Set 以便快速查找哪些 line 被選中要拆分
             const splitIndicesSet = new Set(selectedLines.map(sel => sel.lineIndex));
-            // 篩選出要保留在原區塊的 line 的索引
             const remainingIndices = allLineIndices.filter(i => !splitIndicesSet.has(i));
 
             const sortedGroups = [];
 
-            // 步驟 1: 處理「保留下來的 line」群組
             if (remainingIndices.length > 0) {
                 const newLines = remainingIndices.map(i => originalBlock.lines[i]);
                 const newLinesCoords = remainingIndices.map(i => originalBlock.lines_coords[i]);
-                
-                // 建立一個新的 block 物件來代表這個保留下來的群組
                 const newBlock = {
-                    ...JSON.parse(JSON.stringify(originalBlock)), // 深拷貝以繼承屬性
+                    ...JSON.parse(JSON.stringify(originalBlock)),
                     lines: newLines,
                     lines_coords: newLinesCoords,
-                    box: [] // 外框需要重新計算
+                    box: []
                 };
                 recalculateBoxForBlock(newBlock);
-
-                // 將這個群組加入待排序列表，其排序依據是它包含的第一個 line 的原始索引
                 sortedGroups.push({
                     minIndex: remainingIndices[0],
                     blockData: newBlock
                 });
             }
 
-            // 步驟 2: 處理每一個「被拆分的 line」作為獨立的新群組
             splitIndicesSet.forEach(lineIndex => {
                 const lineText = originalBlock.lines[lineIndex];
                 const lineCoords = originalBlock.lines_coords[lineIndex];
-                
-                // 為這個單獨的 line 建立一個新的 block 物件
                 const newBlock = {
                     ...JSON.parse(JSON.stringify(originalBlock)),
                     lines: [lineText],
@@ -881,41 +871,50 @@
                     box: []
                 };
                 recalculateBoxForBlock(newBlock);
-
-                // 將這個群組加入待排序列表，其排序依據就是它自己的原始索引
                 sortedGroups.push({
                     minIndex: lineIndex,
                     blockData: newBlock
                 });
             });
 
-            // 步驟 3: 根據 minIndex (原始 line 的順序) 對所有群組進行排序
             sortedGroups.sort((a, b) => a.minIndex - b.minIndex);
 
-            // 步驟 4: 從排序好的群組中，提取出最終的 block 物件序列
             const finalNewBlocks = sortedGroups.map(group => group.blockData);
-
-            // 步驟 5: 使用 splice 將原始區塊替換為新產生的區塊序列
-            // 第一個參數是起始索引，第二個是刪除數量(1代表刪除原始區塊)
-            // 後續參數是所有要插入的新元素
             jsonData.blocks.splice(selectedBlockIndex, 1, ...finalNewBlocks);
             
-            // 步驟 6: 重設選擇狀態並重繪 UI
             resetSelectionAndRedraw();
         }
-        // ====================================================================
-        // END: Modified function
-        // ====================================================================
         
+        // ====================================================================
+        // START: Modified function
+        // ====================================================================
         function mergeSelectedLines() {
-            if (selectedLines.length < 2) return;
-            const linesToMerge = selectedLines.map(sel => ({
-                coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
+            if (selectedLines.length < 2) {
+                alert("請至少選擇兩個文字行來進行合併。");
+                return;
+            }
+
+            // 步驟 1: 收集所有被選中的 line 的詳細資訊
+            const linesToMergeDetails = selectedLines.map(sel => ({
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
-                block: jsonData.blocks[sel.blockIndex]
+                coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
+                block: jsonData.blocks[sel.blockIndex],
+                originalBlockIndex: sel.blockIndex,
+                originalLineIndex: sel.lineIndex
             }));
-            const baseBlock = linesToMerge[0].block;
-            const fontSizes = linesToMerge.map(l => l.block.font_size || 0).sort((a, b) => a - b);
+
+            // 步驟 2: 根據「先 block index，後 line index」的原則排序，以決定合併後的順序
+            linesToMergeDetails.sort((a, b) => {
+                if (a.originalBlockIndex !== b.originalBlockIndex) {
+                    return a.originalBlockIndex - b.originalBlockIndex;
+                }
+                return a.originalLineIndex - b.originalLineIndex;
+            });
+
+            const leadingLine = linesToMergeDetails[0];
+
+            // 步驟 3: 建立新的合併後區塊
+            const fontSizes = linesToMergeDetails.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) { medianFontSize = 20; }
             else if (fontSizes.length % 2 === 0) {
@@ -925,23 +924,96 @@
             } else {
                 medianFontSize = fontSizes[Math.floor(fontSizes.length / 2)];
             }
-            const newBlock = { lines_coords: linesToMerge.map(l => l.coord), lines: linesToMerge.map(l => l.text), font_size: parseFloat(medianFontSize.toFixed(2)), vertical: baseBlock.vertical, box: [], angle: 0, tcy_enabled: baseBlock.tcy_enabled };
-            deleteSelectedLines(false);
+
+            const newBlock = {
+                // 繼承領頭 line 所屬區塊的屬性
+                ...JSON.parse(JSON.stringify(leadingLine.block)),
+                // 覆寫 lines 和 lines_coords
+                lines: linesToMergeDetails.map(l => l.text),
+                lines_coords: linesToMergeDetails.map(l => l.coord),
+                font_size: parseFloat(medianFontSize.toFixed(2)),
+                box: [] // 外框稍後重新計算
+            };
             recalculateBoxForBlock(newBlock);
-            jsonData.blocks.push(newBlock);
+
+            // 步驟 4: 重建 blocks 陣列
+            const blockIndicesToRemove = new Set(selectedLines.map(sel => sel.blockIndex));
+            
+            // 篩選出所有未參與合併的區塊
+            const remainingBlocks = jsonData.blocks.filter((_, index) => !blockIndicesToRemove.has(index));
+
+            // 計算新區塊應插入的位置
+            // 核心邏輯：計算在領頭區塊之前，有多少個區塊也被移除了
+            const leadingBlockOriginalIndex = leadingLine.originalBlockIndex;
+            let removedCountBeforeLeader = 0;
+            blockIndicesToRemove.forEach(removedIndex => {
+                if (removedIndex < leadingBlockOriginalIndex) {
+                    removedCountBeforeLeader++;
+                }
+            });
+            const insertionIndex = leadingBlockOriginalIndex - removedCountBeforeLeader;
+
+            // 將新合併的區塊插入到正確位置
+            remainingBlocks.splice(insertionIndex, 0, newBlock);
+
+            // 步驟 5: 用新建的、索引連續的陣列替換舊的 blocks 陣列
+            jsonData.blocks = remainingBlocks;
+
+            // 步驟 6: 重設選擇並重繪
             resetSelectionAndRedraw();
         }
+        // ====================================================================
+        // END: Modified function
+        // ====================================================================
+
         function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
-            selectedLines.sort((a, b) => b.blockIndex - a.blockIndex || b.lineIndex - a.lineIndex);
+            
+            const blockIndicesToRemove = new Set();
+            const linesToRemoveMap = new Map();
+
             selectedLines.forEach(sel => {
-                const block = jsonData.blocks[sel.blockIndex];
-                block.lines_coords.splice(sel.lineIndex, 1);
-                block.lines.splice(sel.lineIndex, 1);
+                blockIndicesToRemove.add(sel.blockIndex);
+                if (!linesToRemoveMap.has(sel.blockIndex)) {
+                    linesToRemoveMap.set(sel.blockIndex, new Set());
+                }
+                linesToRemoveMap.get(sel.blockIndex).add(sel.lineIndex);
             });
-            jsonData.blocks = jsonData.blocks.filter(block => block.lines_coords && block.lines_coords.length > 0);
-            if (redraw) resetSelectionAndRedraw();
+
+            const newBlocks = [];
+            jsonData.blocks.forEach((block, blockIndex) => {
+                // 如果整個區塊都不在要移除的列表中，直接加入
+                if (!blockIndicesToRemove.has(blockIndex)) {
+                    newBlocks.push(block);
+                    return;
+                }
+
+                // 如果區塊在列表中，但並非所有 line 都被選中
+                const linesToRemoveInBlock = linesToRemoveMap.get(blockIndex);
+                if (linesToRemoveInBlock.size < block.lines.length) {
+                    const newLines = [];
+                    const newLinesCoords = [];
+                    block.lines.forEach((line, lineIndex) => {
+                        if (!linesToRemoveInBlock.has(lineIndex)) {
+                            newLines.push(line);
+                            newLinesCoords.push(block.lines_coords[lineIndex]);
+                        }
+                    });
+
+                    const newBlock = { ...block, lines: newLines, lines_coords: newLinesCoords };
+                    recalculateBoxForBlock(newBlock);
+                    newBlocks.push(newBlock);
+                }
+                // 如果區塊的所有 line 都被選中，則整個區塊被刪除，不執行任何操作
+            });
+
+            jsonData.blocks = newBlocks;
+
+            if (redraw) {
+                resetSelectionAndRedraw();
+            }
         }
+
         function resetSelectionAndRedraw() {
             selectedLines = [];
             activeTarget = null;
