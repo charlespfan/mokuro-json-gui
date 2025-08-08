@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (全自動一鍵處理版)</title>
+    <title>Mokuro JSON GUI (Legacy Compatibility)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 JSZip 以建立 ZIP 檔案 -->
@@ -145,9 +145,8 @@
         <div class="divider"></div>
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
-             <button id="batchProcessBtn" class="char-btn" title="一鍵執行：替換、疊字、自動字號">一</button>
+             <button id="batchProcessBtn" class="char-btn" title="一鍵執行：替換、自動字號">一</button>
              <button id="replaceBtn" class="char-btn" title="套用固定取代規則">替</button>
-             <button id="toggleTcyBtn" class="char-btn" title="批次切換數字橫排">叠</button>
              <button id="batchAutoFontSizeBtn" class="char-btn" title="所有页面自动字号">字</button>
         </div>
 
@@ -167,7 +166,6 @@
             <button id="editTextBtn" class="char-btn" title="修改文字" disabled>文</button>
             <button id="editPropBtn" class="char-btn" title="改屬性" disabled>属</button>
             <button id="editFontSizeBtn" class="char-btn" title="改字號" disabled>号</button>
-            <button id="setAngleBtn" class="char-btn" title="設定角度" disabled>角</button>
             <button id="changeCornersBtn" class="icon-btn" title="改变四角" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5 0V6.375c0-.621.504-1.125 1.125-1.125h4.125c.621 0 1.125.504 1.125 1.125V10.5m-4.5 0h4.5" /></svg></button>
             <button id="deleteBtn" class="icon-btn" title="刪除 (0)" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg></button>
         </div>
@@ -202,8 +200,8 @@
     <div id="main-content-wrapper">
         <main id="main-content">
             <header class="text-center mb-8">
-                <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">最終邏輯修正版。</p>
+                <h1 class="text-3xl md:text-4xl font-bold text-white">Mokuro JSON GUI (Legacy)</h1>
+                <p class="mt-2 text-lg text-gray-400">無角度功能，相容舊版 JSON 格式。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -254,7 +252,6 @@
         const preprocessPanel = document.getElementById('preprocessPanel');
         const batchProcessBtn = document.getElementById('batchProcessBtn');
         const replaceBtn = document.getElementById('replaceBtn');
-        const toggleTcyBtn = document.getElementById('toggleTcyBtn');
         const batchAutoFontSizeBtn = document.getElementById('batchAutoFontSizeBtn');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
@@ -269,7 +266,6 @@
         const editTextBtn = document.getElementById('editTextBtn');
         const editPropBtn = document.getElementById('editPropBtn');
         const editFontSizeBtn = document.getElementById('editFontSizeBtn');
-        const setAngleBtn = document.getElementById('setAngleBtn');
         const changeCornersBtn = document.getElementById('changeCornersBtn');
         const exportPanel = document.getElementById('export-panel');
         const exportBtn = document.getElementById('exportBtn');
@@ -293,7 +289,7 @@
         let isDrawingMode = false, isCornerEditMode = false, isReorderMode = false;
         let selectedLines = [], activeTarget = null, reorderSequence = [];
         let isDraggingRect = false, startDragPoint = { x: 0, y: 0 }, currentRect = { x: 0, y: 0, w: 0, h: 0 };
-        let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, originalAngle: 0, center: {x: 0, y: 0}, startAngle: 0 };
+        let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, center: {x: 0, y: 0}, startAngle: 0 };
         const HANDLE_RADIUS = 8, SCALE_HANDLE_RADIUS = 5;
         const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
         const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ", CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,", CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】〝〟。、・";
@@ -304,7 +300,6 @@
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
         batchProcessBtn.addEventListener('click', runBatchProcess);
         replaceBtn.addEventListener('click', () => applyFixedReplacements());
-        toggleTcyBtn.addEventListener('click', () => handleToggleTcy());
         batchAutoFontSizeBtn.addEventListener('click', () => batchAutoSetFontSize());
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -319,7 +314,6 @@
         editTextBtn.addEventListener('click', showTextEditModal);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
-        setAngleBtn.addEventListener('click', handleSetAngle);
         changeCornersBtn.addEventListener('click', toggleCornerEditMode);
         exportBtn.addEventListener('click', exportJson);
         exportAllBtn.addEventListener('click', exportAllJsons);
@@ -449,9 +443,7 @@
                         return; 
                     }
 
-                    if (block.angle === undefined) block.angle = 0;
-                    if (block.tcy_enabled === undefined) block.tcy_enabled = true;
-
+                    // Sort lines within each block for consistency
                     const combined = block.lines_coords.map((coord, i) => ({
                         coord: coord,
                         text: block.lines[i],
@@ -502,7 +494,6 @@
             }
             
             applyFixedReplacements(true); // isSilent = true
-            handleToggleTcy(true); // isSilent = true
             batchAutoSetFontSize(true); // isSilent = true
 
             alert("一键处理流程已执行完毕。");
@@ -511,7 +502,7 @@
         function applyFixedReplacements(isSilent = false) {
             if (!jsonData) return;
             const scope = isSilent ? true : confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
-            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"], ["-Ｏ", "-０"]];
+            const replacements = [["．．．・", "…"], ["…・", "…"], ["．．．", "…"], ["．．", "…"], ["！！！", "‼"], ["！！", "‼"], ["！？", "⁉"], ["「", "｢"], ["」", "｣"], ["【", "["], ["】", "]"], ["（", "("], ["）", ")"], ["／", "！"], ["：", "…"], ["；", "…"], ["ＯＯ", "００"], ["、", "､"], ["サイガー", "サイガ-"]];
             let totalReplacements = 0, filesAffected = 0;
             const processJson = (data) => {
                 let count = 0;
@@ -540,38 +531,6 @@
             drawVisualizations();
         }
         
-        function handleToggleTcy(isSilent = false) {
-            if (!jsonData) return;
-            const enableTcy = isSilent ? true : confirm("您希望 [开启] 数字横排功能吗？\n(按“取消”则为关闭)");
-            const applyGlobally = isSilent ? true : confirm(`您要如何套用设定？\n\n[确定] = 套用到所有 ${matchedFiles.length} 个已载入的页面\n[取消] = 仅套用到当前页面`);
-
-            let blocksAffected = 0;
-            let filesAffected = 0;
-
-            const processData = (data) => {
-                if (data && data.blocks) {
-                    data.blocks.forEach(block => {
-                        block.tcy_enabled = enableTcy;
-                        blocksAffected++;
-                    });
-                }
-            };
-
-            if (applyGlobally) {
-                matchedFiles.forEach(file => {
-                    processData(file.data);
-                });
-                filesAffected = matchedFiles.length;
-            } else {
-                processData(jsonData);
-                filesAffected = 1;
-            }
-            if (!isSilent) {
-                alert(`处理完成！\n已为 ${filesAffected} 个档案中的 ${blocksAffected} 个区块${enableTcy ? '开启' : '关闭'}了数字横排功能。`);
-            }
-            drawVisualizations();
-        }
-
         function batchAutoSetFontSize(isSilent = false) {
             if (!matchedFiles || matchedFiles.length === 0) { 
                 if (!isSilent) alert("请先载入文件！"); 
@@ -641,14 +600,8 @@
                 const blockHandles = getHandlesForBlock(block);
                 for (const handle of blockHandles) {
                     if (Math.hypot(pos.x - handle.x, pos.y - handle.y) <= HANDLE_RADIUS * scaleFactor) {
-                        activeTransform.action = handle.type;
-                        if (handle.type === 'rotate-block') {
-                            activeTransform.center = getBoxCenter(block.box);
-                            activeTransform.startAngle = Math.atan2(pos.y - activeTransform.center.y, pos.x - activeTransform.center.x);
-                            activeTransform.originalAngle = block.angle;
-                        } else { // scale-block
-                             activeTransform.handleIndex = handle.index;
-                        }
+                        activeTransform.action = handle.type; // 'scale-block'
+                        activeTransform.handleIndex = handle.index;
                         activeTransform.startPos = pos;
                         activeTransform.originalBox = [...block.box];
                         return;
@@ -703,16 +656,8 @@
                 return;
             }
             const selectedBlockIndex = getSelectedBlockIndex();
-            if (activeTransform.action === 'rotate-block' && selectedBlockIndex !== -1) {
-                const block = jsonData.blocks[selectedBlockIndex];
-                const currentAngle = Math.atan2(pos.y - activeTransform.center.y, pos.x - activeTransform.center.x);
-                const angleDiff = currentAngle - activeTransform.startAngle;
-                block.angle = activeTransform.originalAngle + (angleDiff * 180 / Math.PI);
-                drawVisualizations();
-                return;
-            }
+            
             if (activeTransform.action === 'scale-block' && selectedBlockIndex !== -1) {
-                // Rotated scaling is complex, for now we implement simple axis-aligned scaling
                 const block = jsonData.blocks[selectedBlockIndex];
                 const [orig_x1, orig_y1, orig_x2, orig_y2] = activeTransform.originalBox;
                 const dx = pos.x - activeTransform.startPos.x;
@@ -796,7 +741,7 @@
         }
         function addNewLine(text, polygon, width, height) {
             const isVertical = (height / width) >= 0.9;
-            const newBlock = { box: [], vertical: isVertical, font_size: 20, angle: 0, lines_coords: [polygon], lines: [text], tcy_enabled: true };
+            const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text] };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
@@ -831,7 +776,6 @@
             editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleBlockSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -852,15 +796,9 @@
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
             const block = jsonData.blocks[blockIndex];
-
-            const choice = confirm("请选择操作：\n\n[确定] = 切换排列方向 (横/竖)\n[取消] = 切换数字横排 (开/关)");
-
-            if (choice) {
-                block.vertical = !block.vertical;
-                recalculateBoxForBlock(block);
-            } else {
-                block.tcy_enabled = !block.tcy_enabled;
-            }
+            block.vertical = !block.vertical;
+            alert(`區塊已切換為 ${block.vertical ? '豎排' : '橫排'}`);
+            recalculateBoxForBlock(block);
             drawVisualizations();
         }
 
@@ -976,7 +914,6 @@
                 block: jsonData.blocks[sel.blockIndex]
             }));
 
-            // 1. 建立由選中行組成的新合併區塊
             const leadingLineBlock = linesToMergeDetails[0].block;
             const fontSizes = linesToMergeDetails.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
@@ -994,11 +931,12 @@
                 font_size: parseFloat(medianFontSize.toFixed(2)),
                 box: []
             };
+            delete newMergedBlock.angle;
+            delete newMergedBlock.tcy_enabled;
             recalculateBoxForBlock(newMergedBlock);
 
-            // 2. 找出受影響的區塊以及其中被選中的行
             const affectedBlockIndices = new Set();
-            const linesToMoveMap = new Map(); // Map<blockIndex, Set<lineIndex>>
+            const linesToMoveMap = new Map(); 
             selectedLines.forEach(sel => {
                 affectedBlockIndices.add(sel.blockIndex);
                 if (!linesToMoveMap.has(sel.blockIndex)) {
@@ -1007,17 +945,13 @@
                 linesToMoveMap.get(sel.blockIndex).add(sel.lineIndex);
             });
 
-            // 3. 建立最終的區塊列表
             const finalBlocks = [];
-            // 首先加入新的合併區塊
             finalBlocks.push(newMergedBlock);
 
             jsonData.blocks.forEach((block, blockIndex) => {
                 if (!affectedBlockIndices.has(blockIndex)) {
-                    // 如果區塊完全未受影響，直接保留
                     finalBlocks.push(block);
                 } else {
-                    // 如果區塊受影響，檢查是否有剩餘的行
                     const linesToMove = linesToMoveMap.get(blockIndex);
                     if (linesToMove.size < block.lines.length) {
                         const remainingLines = [];
@@ -1029,30 +963,27 @@
                             }
                         });
 
-                        // 為剩餘的行建立一個新的區塊
                         const remainderBlock = {
                             ...JSON.parse(JSON.stringify(block)),
                             lines: remainingLines,
                             lines_coords: remainingCoords,
                             box: []
                         };
+                        delete remainderBlock.angle;
+                        delete remainderBlock.tcy_enabled;
                         recalculateBoxForBlock(remainderBlock);
                         finalBlocks.push(remainderBlock);
                     }
-                    // 如果區塊中的所有行都被選中合併，則此區塊自然被捨棄，不執行任何操作
                 }
             });
 
-            // 為了維持頁面順序的直觀性，可以選擇性地對區塊進行排序
             finalBlocks.sort((a, b) => {
                 const boxA = a.box;
                 const boxB = b.box;
                 if (!boxA || boxA.length < 2 || !boxB || boxB.length < 2) return 0;
-                // 簡單地按頂部Y座標排序
                 return boxA[1] - boxB[1];
             });
             
-            // 4. 更新資料並重繪
             jsonData.blocks = finalBlocks;
             resetSelectionAndRedraw();
         }
@@ -1179,10 +1110,23 @@
             }
             drawVisualizations();
         }
+        
+        function createLegacyExportData(data) {
+            const legacyData = JSON.parse(JSON.stringify(data));
+            if (legacyData.blocks) {
+                legacyData.blocks.forEach(block => {
+                    delete block.angle;
+                    delete block.tcy_enabled;
+                });
+            }
+            return legacyData;
+        }
+
         function exportJson() {
             if (!jsonData) { alert("沒有可匯出的資料！"); return; }
             const dataToExport = matchedFiles[currentFileIndex].data;
-            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const legacyData = createLegacyExportData(dataToExport);
+            const jsonString = JSON.stringify(legacyData, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1207,7 +1151,8 @@
             const zip = new JSZip();
 
             matchedFiles.forEach(filePair => {
-                const jsonString = JSON.stringify(filePair.data, null, 2);
+                const legacyData = createLegacyExportData(filePair.data);
+                const jsonString = JSON.stringify(legacyData, null, 2);
                 zip.file(filePair.jsonName, jsonString);
             });
 
@@ -1216,7 +1161,7 @@
                 const url = URL.createObjectURL(content);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'exported_jsons.zip';
+                a.download = 'exported_jsons_legacy.zip';
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -1263,21 +1208,6 @@
             drawVisualizations();
         }
 
-        function handleSetAngle() {
-            const selectedBlockIndex = getSelectedBlockIndex();
-            if (selectedBlockIndex === -1) return;
-            const block = jsonData.blocks[selectedBlockIndex];
-            const newAngle = prompt("請輸入新的角度值 (-180 to 180):", block.angle.toFixed(2));
-            if (newAngle !== null) {
-                const parsedAngle = parseFloat(newAngle);
-                if (!isNaN(parsedAngle)) {
-                    block.angle = parsedAngle;
-                    drawVisualizations();
-                } else {
-                    alert("請輸入有效的數字！");
-                }
-            }
-        }
         function getTargetLines() {
             if (selectedLines.length > 0) {
                 return selectedLines;
@@ -1347,17 +1277,11 @@
                     const [x1, y1, x2, y2] = block.box;
                     const width = x2 - x1;
                     const height = y2 - y1;
-                    const centerX = x1 + width / 2;
-                    const centerY = y1 + height / 2;
-                    const angleRad = (block.angle || 0) * Math.PI / 180;
                     
                     ctx.save();
-                    ctx.translate(centerX, centerY);
-                    ctx.rotate(angleRad);
-                    
                     ctx.strokeStyle = isBlockActive ? '#f59e0b' : '#22c55e';
                     ctx.lineWidth = (isBlockActive ? 4 : 2) * scaleFactor;
-                    ctx.strokeRect(-width / 2, -height / 2, width, height);
+                    ctx.strokeRect(x1, y1, width, height);
 
                     const fontSizeLabel = Math.max(16, Math.round((block.font_size || 20) / 2));
                     ctx.font = `bold ${fontSizeLabel}px "Noto Sans JP", sans-serif`;
@@ -1366,13 +1290,10 @@
                     ctx.strokeStyle = 'black';
                     
                     let labelParts = [`[${blockIndex}]`, `F: ${block.font_size || 'N/A'}`];
-                    if (Math.abs(block.angle) > 0.01) {
-                        labelParts.push(`A: ${block.angle.toFixed(1)}°`);
-                    }
                     const labelContent = labelParts.join(' ');
 
-                    ctx.strokeText(labelContent, -width/2, -height/2 - (10 * scaleFactor));
-                    ctx.fillText(labelContent, -width/2, -height/2 - (10 * scaleFactor));
+                    ctx.strokeText(labelContent, x1, y1 - (10 * scaleFactor));
+                    ctx.fillText(labelContent, x1, y1 - (10 * scaleFactor));
                     
                     ctx.restore();
 
@@ -1380,13 +1301,8 @@
                         getHandlesForBlock(block).forEach(handle => {
                             ctx.beginPath();
                             const size = HANDLE_RADIUS * scaleFactor;
-                            if (handle.type === 'rotate-block') {
-                                ctx.arc(handle.x, handle.y, size, 0, 2 * Math.PI);
-                                ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
-                            } else {
-                                ctx.rect(handle.x - size / 2, handle.y - size / 2, size, size);
-                                ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
-                            }
+                            ctx.rect(handle.x - size / 2, handle.y - size / 2, size, size);
+                            ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
                             ctx.fill();
                         });
                     }
@@ -1528,7 +1444,8 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             if (isVertical) {
-                const tcyEnabled = block.tcy_enabled;
+                // For legacy version, we assume tcy_enabled is false.
+                const tcyEnabled = false; 
                 const segments = [];
                 const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
@@ -1631,7 +1548,7 @@
             if (!text || text.length === 0) return 20;
             if (isVertical) {
                 let totalCharCountForHeight = 0;
-                const tcyEnabled = block.tcy_enabled;
+                const tcyEnabled = false; // Legacy version
                 const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
                 let lastIndex = 0;
@@ -1734,24 +1651,15 @@
         }
         function getHandlesForBlock(block) {
             const [x1, y1, x2, y2] = block.box;
-            const width = x2 - x1, height = y2 - y1;
-            const center = { x: x1 + width / 2, y: y1 + height / 2 };
-            const angleRad = (block.angle || 0) * Math.PI / 180;
-            const corners = [
-                { x: -width / 2, y: -height / 2, index: 0 },
-                { x: width / 2, y: -height / 2, index: 1 },
-                { x: width / 2, y: height / 2, index: 2 },
-                { x: -width / 2, y: height / 2, index: 3 },
+            const handles = [
+                { x: x1, y: y1, type: 'scale-block', index: 0 },
+                { x: x2, y: y1, type: 'scale-block', index: 1 },
+                { x: x2, y: y2, type: 'scale-block', index: 2 },
+                { x: x1, y: y2, type: 'scale-block', index: 3 },
             ];
-            const rotatedCorners = corners.map(p => ({...rotatePoint(p, {x:0, y:0}, block.angle), index: p.index}));
-            const handles = rotatedCorners.map(p => ({ x: p.x + center.x, y: p.y + center.y, type: 'scale-block', index: p.index }));
-            const topCenter = { x: 0, y: -height / 2 };
-            const rotatedTopCenter = rotatePoint(topCenter, {x:0,y:0}, block.angle);
-            handles.push({ x: rotatedTopCenter.x + center.x, y: rotatedTopCenter.y - 25, type: 'rotate-block' });
             return handles;
         }
-        function rotatePoint(point, center, angleDegrees) {
-            const angleRad = angleDegrees * Math.PI / 180;
+        function rotatePoint(point, center, angleRad) {
             const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
             const dx = point.x - center.x, dy = point.y - center.y;
             return {
@@ -1761,7 +1669,7 @@
         }
         function rotatePolygon(points, center, angleRad) {
             return points.map(p => {
-                const rotated = rotatePoint({x: p[0], y: p[1]}, center, angleRad * 180 / Math.PI);
+                const rotated = rotatePoint({x: p[0], y: p[1]}, center, angleRad);
                 return [rotated.x, rotated.y];
             });
         }
@@ -1769,62 +1677,21 @@
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
                 block.box = [0, 0, 0, 0];
-                block.angle = 0;
                 return;
             }
 
-            const isInitiallyStraight = Math.abs(block.angle) < 0.01;
-            let finalAngleDeg = 0;
-
-            if (!isInitiallyStraight) {
-                let totalBaselineVecX = 0;
-                let totalBaselineVecY = 0;
-                block.lines_coords.forEach(poly => {
-                    const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
-                    const baseline_vec1 = { x: p1[0] - p0[0], y: p1[1] - p0[1] };
-                    const baseline_vec2 = { x: p2[0] - p3[0], y: p2[1] - p3[1] };
-                    totalBaselineVecX += baseline_vec1.x + baseline_vec2.x;
-                    totalBaselineVecY += baseline_vec1.y + baseline_vec2.y;
-                });
-                const baselineAngleRad = Math.atan2(totalBaselineVecY, totalBaselineVecX);
-                let baselineAngleDeg = baselineAngleRad * 180 / Math.PI;
-                if (baselineAngleDeg > 90) baselineAngleDeg -= 180;
-                if (baselineAngleDeg < -90) baselineAngleDeg += 180;
-                finalAngleDeg = baselineAngleDeg;
-            }
-            
-            block.angle = finalAngleDeg;
-
-            let allPoints = [];
-            block.lines_coords.forEach(poly => {
-                allPoints.push(...poly.map(p => ({ x: p[0], y: p[1] })));
-            });
-
-            const center = allPoints.reduce((acc, p) => ({x: acc.x + p.x, y: acc.y + p.y}), {x:0, y:0});
-            center.x /= allPoints.length;
-            center.y /= allPoints.length;
-
-            const rotatedPoints = allPoints.map(p => rotatePoint(p, center, -block.angle));
-
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            rotatedPoints.forEach(p => {
-                minX = Math.min(minX, p.x);
-                minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x);
-                maxY = Math.max(maxY, p.y);
+            
+            block.lines_coords.forEach(poly => {
+                poly.forEach(point => {
+                    minX = Math.min(minX, point[0]);
+                    minY = Math.min(minY, point[1]);
+                    maxX = Math.max(maxX, point[0]);
+                    maxY = Math.max(maxY, point[1]);
+                });
             });
 
-            const width = maxX - minX;
-            const height = maxY - minY;
-            const rotatedCenter = { x: minX + width / 2, y: minY + height / 2 };
-            const finalCenter = rotatePoint(rotatedCenter, center, block.angle);
-
-            block.box = [
-                finalCenter.x - width / 2,
-                finalCenter.y - height / 2,
-                finalCenter.x + width / 2,
-                finalCenter.y + height / 2,
-            ];
+            block.box = [minX, minY, maxX, maxY];
         }
     </script>
 </body>
