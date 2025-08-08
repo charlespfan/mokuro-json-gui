@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (縦中横功能修正版)</title>
+    <title>JSON 標註互動式編輯工具 (全形數字修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -1078,7 +1078,7 @@
             if (isVertical) {
                 const tcyEnabled = block.tcy_enabled;
                 const segments = [];
-                const regex = /(\d{2,4})/g;
+                const regex = /([\d\uFF10-\uFF19]{2,4})/g; // LOGIC FIX: Match both half-width and full-width digits
                 let match;
                 let lastIndex = 0;
 
@@ -1098,7 +1098,7 @@
                 let totalTextHeight = 0;
                 segments.forEach(seg => {
                     if (seg.tcy) {
-                        totalTextHeight += fontSize; // TCY block occupies one character's height
+                        totalTextHeight += fontSize;
                     } else {
                         for (const char of seg.text) {
                             totalTextHeight += getCharVerticalHeight(char, fontSize);
@@ -1109,9 +1109,8 @@
                 let currentY = -totalTextHeight / 2;
                 for (const seg of segments) {
                     if (seg.tcy) {
-                        const segmentHeight = fontSize; // It occupies one character's height
+                        const segmentHeight = fontSize;
                         const charY = currentY + segmentHeight / 2;
-                        // Draw stacked numbers
                         for (let i = 0; i < seg.text.length; i++) {
                             const char = seg.text[i];
                             ctx.save();
@@ -1184,7 +1183,7 @@
             if (isVertical) {
                 let totalCharCountForHeight = 0;
                 const tcyEnabled = block.tcy_enabled;
-                const regex = /(\d{2,4})/g;
+                const regex = /([\d\uFF10-\uFF19]{2,4})/g; // LOGIC FIX: Match both half-width and full-width digits
                 let match;
                 let lastIndex = 0;
                 let processedText = "";
