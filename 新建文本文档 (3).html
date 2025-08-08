@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (最終顯示修正版)</title>
+    <title>JSON 標註互動式編輯工具 (縦中横功能版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -133,6 +133,8 @@
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
              <button id="replaceBtn" class="icon-btn" title="套用固定取代規則"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.18-3.185m-7.528 0l-3.182-3.182a8.25 8.25 0 0111.664 0l3.18 3.185" /></svg></button>
+             <!-- New TCY Toggle Button -->
+             <button id="toggleTcyBtn" class="icon-btn" title="批次切換數字橫排"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v.01m0 3.49v.01m0 3.49v.01m0 3.49v.01m-4.5-.01H12a2.25 2.25 0 012.25 2.25V19.5h-4.5v-3.74a2.25 2.25 0 012.25-2.25z" /></svg></button>
              <button id="batchAutoFontSizeBtn" class="icon-btn" title="所有页面自动字号"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg></button>
         </div>
 
@@ -149,7 +151,7 @@
             <button id="splitBtn" class="char-btn" title="拆分" disabled>拆</button>
 
             <button id="editTextBtn" class="icon-btn" title="修改文字" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg></button>
-            <button id="editPropBtn" class="icon-btn" title="改屬性(橫/豎排)" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.998 15.998 0 013.388-1.62" /></svg></button>
+            <button id="editPropBtn" class="icon-btn" title="改屬性" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.998 15.998 0 013.388-1.62" /></svg></button>
             <button id="editFontSizeBtn" class="icon-btn" title="改字號" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" /></svg></button>
             <button id="setAngleBtn" class="icon-btn" title="設定角度" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 7.38m5.84-7.38l-5.84 7.38m5.84-7.38v4.82" /></svg></button>
             <button id="changeCornersBtn" class="icon-btn" title="改变四角" disabled><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5 0V6.375c0-.621.504-1.125 1.125-1.125h4.125c.621 0 1.125.504 1.125 1.125V10.5m-4.5 0h4.5" /></svg></button>
@@ -179,7 +181,7 @@
         <main id="main-content">
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">最終邏輯修正版。</p>
+                <p class="mt-2 text-lg text-gray-400">新增「縦中横」控制功能。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -214,6 +216,7 @@
         const showTextCheckbox = document.getElementById('showText');
         const preprocessPanel = document.getElementById('preprocessPanel');
         const replaceBtn = document.getElementById('replaceBtn');
+        const toggleTcyBtn = document.getElementById('toggleTcyBtn');
         const batchAutoFontSizeBtn = document.getElementById('batchAutoFontSizeBtn');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
@@ -246,6 +249,7 @@
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
         replaceBtn.addEventListener('click', applyFixedReplacements);
+        toggleTcyBtn.addEventListener('click', handleToggleTcy);
         batchAutoFontSizeBtn.addEventListener('click', batchAutoSetFontSize);
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -343,9 +347,8 @@
             jsonData = currentPair.data;
             if (jsonData.blocks) {
                 jsonData.blocks.forEach(block => {
-                    if (block.angle === undefined) {
-                        block.angle = 0;
-                    }
+                    if (block.angle === undefined) block.angle = 0;
+                    if (block.tcy_enabled === undefined) block.tcy_enabled = true; // Default TCY to true
                 });
             }
             try {
@@ -402,6 +405,38 @@
             alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
             drawVisualizations();
         }
+        
+        function handleToggleTcy() {
+            if (!jsonData) return;
+            const enableTcy = confirm("您希望 [开启] 数字横排功能吗？\n(按“取消”则为关闭)");
+            const applyGlobally = confirm(`您要如何套用设定？\n\n[确定] = 套用到所有 ${matchedFiles.length} 个已载入的页面\n[取消] = 仅套用到当前页面`);
+
+            let blocksAffected = 0;
+            let filesAffected = 0;
+
+            const processData = (data) => {
+                if (data && data.blocks) {
+                    data.blocks.forEach(block => {
+                        block.tcy_enabled = enableTcy;
+                        blocksAffected++;
+                    });
+                }
+            };
+
+            if (applyGlobally) {
+                matchedFiles.forEach(file => {
+                    processData(file.data);
+                });
+                filesAffected = matchedFiles.length;
+            } else {
+                processData(jsonData);
+                filesAffected = 1;
+            }
+
+            alert(`处理完成！\n已为 ${filesAffected} 个档案中的 ${blocksAffected} 个区块${enableTcy ? '开启' : '关闭'}了数字横排功能。`);
+            drawVisualizations();
+        }
+
         function batchAutoSetFontSize() {
             if (!matchedFiles || matchedFiles.length === 0) { alert("请先载入文件！"); return; }
             if (!confirm(`确定要为所有 ${matchedFiles.length} 个页面的所有区块自动设定字号吗？此操作不可撤销。`)) { return; }
@@ -445,7 +480,7 @@
         function handleMouseDown(e) {
             const pos = getMousePos(e);
             if (isDrawingMode) {
-                isDraggingRect = true;
+                isDrawingRect = true;
                 startDragPoint = pos;
                 currentRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
                 return;
@@ -613,7 +648,7 @@
         }
         function addNewLine(text, polygon, width, height) {
             const isVertical = (height / width) >= 0.9;
-            const newBlock = { box: [], vertical: isVertical, font_size: 20, angle: 0, lines_coords: [polygon], lines: [text] };
+            const newBlock = { box: [], vertical: isVertical, font_size: 20, angle: 0, lines_coords: [polygon], lines: [text], tcy_enabled: true };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
@@ -645,10 +680,10 @@
             deleteBtn.title = `刪除 (${count})`;
             splitBtn.disabled = !(count > 0 && isSingleBlockSelected);
             editTextBtn.disabled = !isSingleLineSelected;
-            editPropBtn.disabled = !isSingleLineSelected;
+            editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleLineSelected;
+            setAngleBtn.disabled = !isSingleBlockSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -664,18 +699,26 @@
                 resetSelectionAndRedraw();
             }
         }
+        
+        /**
+         * LOGIC CHANGE: The "Edit Properties" button now offers two choices.
+         */
         function editSelectedBlockProps() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
             const block = jsonData.blocks[blockIndex];
-            const currentStatus = block.vertical ? "豎排" : "橫排";
-            const newStatus = block.vertical ? "橫排" : "豎排";
-            if (confirm(`此區塊目前為 [${currentStatus}]。\n您確定要切換為 [${newStatus}] 嗎？`)) {
+
+            const choice = confirm("请选择操作：\n\n[确定] = 切换排列方向 (横/竖)\n[取消] = 切换数字横排 (开/关)");
+
+            if (choice) { // User chose "OK" -> Toggle vertical/horizontal
                 block.vertical = !block.vertical;
                 recalculateBoxForBlock(block);
-                drawVisualizations();
+            } else { // User chose "Cancel" -> Toggle TCY
+                block.tcy_enabled = !block.tcy_enabled;
             }
+            drawVisualizations();
         }
+
         function editSelectedBlockFontSize() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -768,7 +811,7 @@
             } else {
                 medianFontSize = fontSizes[Math.floor(fontSizes.length / 2)];
             }
-            const newBlock = { lines_coords: linesToMerge.map(l => l.coord), lines: linesToMerge.map(l => l.text), font_size: parseFloat(medianFontSize.toFixed(2)), vertical: baseBlock.vertical, box: [], angle: 0 };
+            const newBlock = { lines_coords: linesToMerge.map(l => l.coord), lines: linesToMerge.map(l => l.text), font_size: parseFloat(medianFontSize.toFixed(2)), vertical: baseBlock.vertical, box: [], angle: 0, tcy_enabled: baseBlock.tcy_enabled };
             deleteSelectedLines(false);
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
@@ -925,7 +968,6 @@
                     ctx.lineWidth = 3 * scaleFactor;
                     ctx.strokeStyle = 'black';
                     
-                    // LOGIC FIX: Conditional label display
                     let labelParts = [`[${blockIndex}]`, `F: ${block.font_size || 'N/A'}`];
                     if (Math.abs(block.angle) > 0.01) {
                         labelParts.push(`A: ${block.angle.toFixed(1)}°`);
@@ -986,7 +1028,7 @@
                         }
 
                         if (showText) {
-                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block.vertical, block.font_size, scaleFactor);
+                            drawTextInPolygon(block.lines[lineIndex], linePolygon, block, fontSize, scaleFactor);
                         }
                         if (isActiveTarget) {
                             getHandlesForLine(linePolygon).forEach(handle => {
@@ -1024,7 +1066,8 @@
             if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) { return fontSize * 0.5; }
             return fontSize;
         }
-        function drawTextInPolygon(text, polygon, isVertical, fontSize = 20, scaleFactor = 1) {
+        function drawTextInPolygon(text, polygon, block, fontSize = 20, scaleFactor = 1) {
+            const isVertical = block.vertical;
             const p0 = polygon[0], p1 = polygon[1];
             let angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
             
@@ -1045,34 +1088,84 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             if (isVertical) {
+                const tcyEnabled = block.tcy_enabled;
+                const regex = /(\d{2,4})/g; // TCY for 2-4 digits
+                const segments = [];
+                let lastIndex = 0;
+
+                if (tcyEnabled) {
+                    text.replace(regex, (match, offset) => {
+                        if (offset > lastIndex) {
+                            segments.push({ text: text.substring(lastIndex, offset), tcy: false });
+                        }
+                        segments.push({ text: match, tcy: true });
+                        lastIndex = offset + match.length;
+                    });
+                }
+                if (lastIndex < text.length) {
+                    segments.push({ text: text.substring(lastIndex), tcy: false });
+                }
+
                 let totalTextHeight = 0;
-                for (const char of text) { totalTextHeight += getCharVerticalHeight(char, fontSize); }
-                let currentY = -totalTextHeight / 2;
-                for (let i = 0; i < text.length; i++) {
-                    const char = text[i];
-                    const charHeight = getCharVerticalHeight(char, fontSize);
-                    const charY = currentY + charHeight / 2;
-                    if (CHARS_TO_ROTATE.includes(char)) {
-                        ctx.save();
-                        ctx.translate(0, charY);
-                        ctx.rotate(Math.PI / 2);
-                        if (char === "〜") ctx.scale(-1, 1);
-                        ctx.strokeText(char, 0, 0);
-                        ctx.fillText(char, 0, 0);
-                        ctx.restore();
-                    } else if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
-                        const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
-                        ctx.strokeText(char, offsetX, charY - offsetY);
-                        ctx.fillText(char, offsetX, charY - offsetY);
-                    } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
-                        const offsetX = fontSize * 0.15, offsetY = fontSize * 0.15;
-                        ctx.strokeText(char, offsetX, charY - offsetY);
-                        ctx.fillText(char, offsetX, charY - offsetY);
+                segments.forEach(seg => {
+                    if (seg.tcy) {
+                        const tcyFont = `${fontSize}px "Noto Sans JP", sans-serif`;
+                        ctx.font = tcyFont;
+                        totalTextHeight += ctx.measureText(seg.text).width * 0.8; // TCY text is slightly wider than it is tall
+                        ctx.font = font;
                     } else {
-                        ctx.strokeText(char, 0, charY);
-                        ctx.fillText(char, 0, charY);
+                        for (const char of seg.text) {
+                            totalTextHeight += getCharVerticalHeight(char, fontSize);
+                        }
                     }
-                    currentY += charHeight;
+                });
+
+                let currentY = -totalTextHeight / 2;
+                for (const seg of segments) {
+                    if (seg.tcy) {
+                        const tcyFont = `${fontSize}px "Noto Sans JP", sans-serif`;
+                        ctx.font = tcyFont;
+                        const segmentWidth = ctx.measureText(seg.text).width * 0.8;
+                        const segmentHeight = segmentWidth;
+                        
+                        ctx.save();
+                        ctx.translate(0, currentY + segmentHeight / 2);
+                        ctx.rotate(Math.PI / 2);
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.strokeText(seg.text, 0, 0);
+                        ctx.fillText(seg.text, 0, 0);
+                        ctx.restore();
+
+                        currentY += segmentHeight;
+                        ctx.font = font;
+                    } else {
+                        for (const char of seg.text) {
+                            const charHeight = getCharVerticalHeight(char, fontSize);
+                            const charY = currentY + charHeight / 2;
+                            if (CHARS_TO_ROTATE.includes(char)) {
+                                ctx.save();
+                                ctx.translate(0, charY);
+                                ctx.rotate(Math.PI / 2);
+                                if (char === "〜") ctx.scale(-1, 1);
+                                ctx.strokeText(char, 0, 0);
+                                ctx.fillText(char, 0, 0);
+                                ctx.restore();
+                            } else if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
+                                const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
+                                ctx.strokeText(char, offsetX, charY - offsetY);
+                                ctx.fillText(char, offsetX, charY - offsetY);
+                            } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
+                                const offsetX = fontSize * 0.15, offsetY = fontSize * 0.15;
+                                ctx.strokeText(char, offsetX, charY - offsetY);
+                                ctx.fillText(char, offsetX, charY - offsetY);
+                            } else {
+                                ctx.strokeText(char, 0, charY);
+                                ctx.fillText(char, 0, charY);
+                            }
+                            currentY += charHeight;
+                        }
+                    }
                 }
             } else {
                 ctx.textAlign = 'left';
