@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (自訂編輯框版)</title>
+    <title>JSON 標註互動式編輯工具 (選中邏輯修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -299,7 +299,6 @@
         mainCanvas.addEventListener('mouseup', handleMouseUp);
         mainCanvas.addEventListener('mouseout', handleMouseOut);
         
-        // Modal Event Listeners
         textModalCancel.addEventListener('click', () => {
             textEditModal.classList.add('hidden');
             textEditModal.classList.remove('flex');
@@ -312,11 +311,10 @@
                 textEditModal.classList.add('hidden');
                 textEditModal.classList.remove('flex');
                 currentLineEdit = null;
-                drawVisualizations();
+                drawVisualizations(); // LOGIC FIX: Only redraw, don't reset selection
             }
         });
 
-        // Generate Symbol Buttons
         const symbols = ['｢', '｣', '『', '』', '〝', '〟'];
         symbols.forEach(symbol => {
             const btn = document.createElement('button');
@@ -751,7 +749,7 @@
             editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleBlockSelected;
+            setAngleBtn.disabled = !isSingleLineSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -793,7 +791,7 @@
                 const parsedSize = parseFloat(newSize);
                 if (!isNaN(parsedSize) && parsedSize > 0) {
                     block.font_size = parsedSize;
-                    resetSelectionAndRedraw();
+                    drawVisualizations(); // LOGIC FIX: Only redraw
                 } else {
                     alert("請輸入有效的數字！");
                 }
@@ -823,7 +821,7 @@
                 });
                 block.font_size = parseFloat(minFontSize.toFixed(2));
             });
-            resetSelectionAndRedraw();
+            drawVisualizations(); // LOGIC FIX: Only redraw
         }
         function fitSelectedBlockToLines() {
             const blockIndex = getSelectedBlockIndex();
@@ -841,22 +839,47 @@
             const originalBlock = jsonData.blocks[selectedBlockIndex];
             const newBlocks = [];
             const indicesToRemove = selectedLines.map(sel => sel.lineIndex).sort((a, b) => b - a);
+
             indicesToRemove.forEach(lineIndex => {
                 const lineText = originalBlock.lines[lineIndex];
                 const lineCoords = originalBlock.lines_coords[lineIndex];
-                const newBlock = { ...originalBlock, lines: [lineText], lines_coords: [lineCoords], box: [] };
+                const newBlock = { 
+                    ...JSON.parse(JSON.stringify(originalBlock)),
+                    lines: [lineText], 
+                    lines_coords: [lineCoords], 
+                    box: [] 
+                };
                 recalculateBoxForBlock(newBlock);
                 newBlocks.push(newBlock);
             });
+
             indicesToRemove.forEach(lineIndex => {
                 originalBlock.lines.splice(lineIndex, 1);
                 originalBlock.lines_coords.splice(lineIndex, 1);
             });
+
             if (originalBlock.lines.length === 0) {
                 jsonData.blocks.splice(selectedBlockIndex, 1);
+            } else {
+                recalculateBoxForBlock(originalBlock);
             }
+
             jsonData.blocks.push(...newBlocks);
-            resetSelectionAndRedraw();
+
+            // LOGIC FIX: Reselect the newly created lines
+            const newSelection = [];
+            newBlocks.forEach(nb => {
+                const newBlockIndex = jsonData.blocks.indexOf(nb);
+                if (newBlockIndex !== -1) {
+                    newSelection.push({ blockIndex: newBlockIndex, lineIndex: 0 });
+                }
+            });
+
+            selectedLines = newSelection;
+            activeTarget = selectedLines.length > 0 ? selectedLines[0] : null;
+
+            updateActionButtons();
+            drawVisualizations();
         }
         function mergeSelectedLines() {
             if (selectedLines.length < 2) return;
