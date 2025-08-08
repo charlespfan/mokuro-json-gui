@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (負角度修正版)</title>
+    <title>JSON 標註互動式編輯工具 (文字方向修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -179,7 +179,7 @@
         <main id="main-content">
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">已修正負角度計算邏輯。</p>
+                <p class="mt-2 text-lg text-gray-400">已修正文字方向顯示邏輯。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -976,13 +976,24 @@
             if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) { return fontSize * 0.5; }
             return fontSize;
         }
+
+        /**
+         * LOGIC FIX: Normalize the text rendering angle to prevent upside-down text.
+         */
         function drawTextInPolygon(text, polygon, isVertical, fontSize = 20, scaleFactor = 1) {
             const p0 = polygon[0], p1 = polygon[1];
-            const angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+            let angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+            
+            // Normalize angle to ensure text is always upright (-90 to +90 degrees) for readability
+            let angleDeg = angle * 180 / Math.PI;
+            if (angleDeg > 90) angleDeg -= 180;
+            if (angleDeg < -90) angleDeg += 180;
+            angle = angleDeg * Math.PI / 180;
+
             const center = getPolygonCenter(polygon);
             ctx.save();
             ctx.translate(center.x, center.y);
-            ctx.rotate(angle);
+            ctx.rotate(angle); // Use the normalized angle for rendering
             const font = `${fontSize}px "Noto Sans JP", sans-serif`;
             ctx.font = font;
             ctx.fillStyle = 'black';
@@ -1145,9 +1156,6 @@
             });
         }
         
-        /**
-         * LOGIC FIX: Removed angle normalization to allow the full -180 to 180 degree range.
-         */
         function recalculateBoxForBlock(block) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
                 block.box = [0, 0, 0, 0];
@@ -1180,10 +1188,6 @@
 
             const mainAxisAngleRad = Math.atan2(totalVecY, totalVecX);
             let avgAngleDeg = mainAxisAngleRad * 180 / Math.PI;
-
-            // REMOVED: Angle normalization. The angle will now be the raw calculated value.
-            // if (avgAngleDeg > 90) avgAngleDeg -= 180;
-            // if (avgAngleDeg < -90) avgAngleDeg += 180;
             
             block.angle = avgAngleDeg;
             const preciseAxisAngleRad = avgAngleDeg * Math.PI / 180;
