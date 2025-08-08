@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (批次匯出功能版)</title>
+    <title>JSON 標註互動式編輯工具 (一鍵處理功能版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 JSZip 以建立 ZIP 檔案 -->
@@ -145,6 +145,7 @@
         <div class="divider"></div>
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
+             <button id="batchProcessBtn" class="char-btn" title="一鍵執行：替換、疊字、自動字號">一</button>
              <button id="replaceBtn" class="char-btn" title="套用固定取代規則">替</button>
              <button id="toggleTcyBtn" class="char-btn" title="批次切換數字橫排">叠</button>
              <button id="batchAutoFontSizeBtn" class="char-btn" title="所有页面自动字号">字</button>
@@ -251,6 +252,7 @@
         const showLinesCheckbox = document.getElementById('showLines');
         const showTextCheckbox = document.getElementById('showText');
         const preprocessPanel = document.getElementById('preprocessPanel');
+        const batchProcessBtn = document.getElementById('batchProcessBtn');
         const replaceBtn = document.getElementById('replaceBtn');
         const toggleTcyBtn = document.getElementById('toggleTcyBtn');
         const batchAutoFontSizeBtn = document.getElementById('batchAutoFontSizeBtn');
@@ -300,6 +302,7 @@
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
+        batchProcessBtn.addEventListener('click', runBatchProcess);
         replaceBtn.addEventListener('click', applyFixedReplacements);
         toggleTcyBtn.addEventListener('click', handleToggleTcy);
         batchAutoFontSizeBtn.addEventListener('click', batchAutoSetFontSize);
@@ -490,6 +493,21 @@
                 console.error("Error loading image file:", error);
                 alert(`載入圖片檔案 ${currentPair.image.name} 時出錯。`);
             }
+        }
+
+        function runBatchProcess() {
+            if (!matchedFiles || matchedFiles.length === 0) {
+                alert("请先载入文件！");
+                return;
+            }
+
+            alert("即将开始一键处理流程：\n1. 固定规则替换\n2. 数字横排设定\n3. 批量自动字号\n\n您将需要为每个步骤进行确认。");
+            
+            applyFixedReplacements();
+            handleToggleTcy();
+            batchAutoSetFontSize();
+
+            alert("一键处理流程已执行完毕。");
         }
 
         function applyFixedReplacements() {
