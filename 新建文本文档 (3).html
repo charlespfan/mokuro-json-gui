@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (點擊修正版)</title>
+    <title>JSON 標註互動式編輯工具 (最終排序邏輯版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -406,17 +406,49 @@
             }
         }
 
+        // ====================================================================
+        // START: Modified function
+        // ====================================================================
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
+            
+            // 步驟 1: 確保 jsonData 和 blocks 存在
             if (jsonData && jsonData.blocks && Array.isArray(jsonData.blocks)) {
+                
+                // 步驟 2: 遍歷每一個 block 進行標準化和排序
                 jsonData.blocks.forEach(block => {
-                    if (block && typeof block === 'object') {
-                        if (block.angle === undefined) block.angle = 0;
-                        if (block.tcy_enabled === undefined) block.tcy_enabled = true;
+                    if (!block || typeof block !== 'object' || !Array.isArray(block.lines_coords) || !Array.isArray(block.lines)) {
+                        return; // 跳過無效的 block
                     }
+
+                    // 標準化: 確保 angle 和 tcy_enabled 屬性存在
+                    if (block.angle === undefined) block.angle = 0;
+                    if (block.tcy_enabled === undefined) block.tcy_enabled = true;
+
+                    // 排序預處理: 將 lines 和 lines_coords 綁定在一起
+                    const combined = block.lines_coords.map((coord, i) => ({
+                        coord: coord,
+                        text: block.lines[i],
+                        center: getPolygonCenter(coord) // 計算每個 line 的中心點
+                    }));
+
+                    // 步驟 3: 根據 block 的排列方向進行排序
+                    if (block.vertical) {
+                        // 豎排: 從右到左排序 (中心點的 X 座標越大越靠前)
+                        combined.sort((a, b) => b.center.x - a.center.x);
+                    } else {
+                        // 橫排: 從上到下排序 (中心點的 Y 座標越小越靠前)
+                        combined.sort((a, b) => a.center.y - b.center.y);
+                    }
+
+                    // 步驟 4: 將排序後的結果寫回 block 中
+                    block.lines_coords = combined.map(item => item.coord);
+                    block.lines = combined.map(item => item.text);
                 });
             }
+
+            // 步驟 5: 載入圖片並繪製
             try {
                 const imageSrc = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -442,6 +474,10 @@
                 alert(`載入圖片檔案 ${currentPair.image.name} 時出錯。`);
             }
         }
+        // ====================================================================
+        // END: Modified function
+        // ====================================================================
+
         function applyFixedReplacements() {
             if (!jsonData) return;
             const scope = confirm(`您要如何套用取代規則？\n\n- 按「確定」：處理所有 ${matchedFiles.length} 個已匯入的檔案。\n- 按「取消」：僅處理當前檔案。`);
@@ -885,16 +921,12 @@
             resetSelectionAndRedraw();
         }
         
-        // ====================================================================
-        // START: Modified function
-        // ====================================================================
         function mergeSelectedLines() {
             if (selectedLines.length < 2) {
                 alert("請至少選擇兩個文字行來進行合併。");
                 return;
             }
 
-            // 步驟 1: 收集所有被選中的 line 的詳細資訊
             const linesToMergeDetails = selectedLines.map(sel => ({
                 text: jsonData.blocks[sel.blockIndex].lines[sel.lineIndex],
                 coord: jsonData.blocks[sel.blockIndex].lines_coords[sel.lineIndex],
@@ -903,7 +935,6 @@
                 originalLineIndex: sel.lineIndex
             }));
 
-            // 步驟 2: 根據「先 block index，後 line index」的原則排序，以決定合併後的順序
             linesToMergeDetails.sort((a, b) => {
                 if (a.originalBlockIndex !== b.originalBlockIndex) {
                     return a.originalBlockIndex - b.originalBlockIndex;
@@ -913,7 +944,6 @@
 
             const leadingLine = linesToMergeDetails[0];
 
-            // 步驟 3: 建立新的合併後區塊
             const fontSizes = linesToMergeDetails.map(l => l.block.font_size || 0).sort((a, b) => a - b);
             let medianFontSize;
             if (fontSizes.length === 0) { medianFontSize = 20; }
@@ -926,24 +956,18 @@
             }
 
             const newBlock = {
-                // 繼承領頭 line 所屬區塊的屬性
                 ...JSON.parse(JSON.stringify(leadingLine.block)),
-                // 覆寫 lines 和 lines_coords
                 lines: linesToMergeDetails.map(l => l.text),
                 lines_coords: linesToMergeDetails.map(l => l.coord),
                 font_size: parseFloat(medianFontSize.toFixed(2)),
-                box: [] // 外框稍後重新計算
+                box: []
             };
             recalculateBoxForBlock(newBlock);
 
-            // 步驟 4: 重建 blocks 陣列
             const blockIndicesToRemove = new Set(selectedLines.map(sel => sel.blockIndex));
             
-            // 篩選出所有未參與合併的區塊
             const remainingBlocks = jsonData.blocks.filter((_, index) => !blockIndicesToRemove.has(index));
 
-            // 計算新區塊應插入的位置
-            // 核心邏輯：計算在領頭區塊之前，有多少個區塊也被移除了
             const leadingBlockOriginalIndex = leadingLine.originalBlockIndex;
             let removedCountBeforeLeader = 0;
             blockIndicesToRemove.forEach(removedIndex => {
@@ -953,18 +977,11 @@
             });
             const insertionIndex = leadingBlockOriginalIndex - removedCountBeforeLeader;
 
-            // 將新合併的區塊插入到正確位置
             remainingBlocks.splice(insertionIndex, 0, newBlock);
-
-            // 步驟 5: 用新建的、索引連續的陣列替換舊的 blocks 陣列
             jsonData.blocks = remainingBlocks;
 
-            // 步驟 6: 重設選擇並重繪
             resetSelectionAndRedraw();
         }
-        // ====================================================================
-        // END: Modified function
-        // ====================================================================
 
         function deleteSelectedLines(redraw = true) {
             if (selectedLines.length < 1) return;
@@ -982,13 +999,10 @@
 
             const newBlocks = [];
             jsonData.blocks.forEach((block, blockIndex) => {
-                // 如果整個區塊都不在要移除的列表中，直接加入
                 if (!blockIndicesToRemove.has(blockIndex)) {
                     newBlocks.push(block);
                     return;
                 }
-
-                // 如果區塊在列表中，但並非所有 line 都被選中
                 const linesToRemoveInBlock = linesToRemoveMap.get(blockIndex);
                 if (linesToRemoveInBlock.size < block.lines.length) {
                     const newLines = [];
@@ -1004,7 +1018,6 @@
                     recalculateBoxForBlock(newBlock);
                     newBlocks.push(newBlock);
                 }
-                // 如果區塊的所有 line 都被選中，則整個區塊被刪除，不執行任何操作
             });
 
             jsonData.blocks = newBlocks;
@@ -1493,11 +1506,15 @@
             }
             return null;
         }
+        
+        // Helper function to calculate the geometric center of a polygon
         function getPolygonCenter(polygon) {
+            if (!polygon || polygon.length === 0) return { x: 0, y: 0 };
             let x = 0, y = 0;
             polygon.forEach(p => { x += p[0]; y += p[1]; });
             return { x: x / polygon.length, y: y / polygon.length };
         }
+        
         function getBoxCenter(box) {
             const [x1, y1, x2, y2] = box;
             return { x: x1 + (x2 - x1) / 2, y: y1 + (y2 - y1) / 2 };
