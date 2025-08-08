@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (點擊修正版)</title>
+    <title>JSON 標註互動式編輯工具 (自訂編輯框版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -113,6 +113,12 @@
             overflow-x: hidden;
             padding: 1rem;
         }
+
+        /* Custom Modal Styles */
+        #textEditModal {
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+        }
     </style>
 </head>
 <body>
@@ -188,6 +194,21 @@
         </main>
     </div>
 
+    <!-- Custom Modal for Text Editing -->
+    <div id="textEditModal" class="fixed inset-0 items-center justify-center hidden">
+        <div class="card p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold mb-4">修改文字</h3>
+            <input type="text" id="textModalInput" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <div id="symbolButtons" class="flex gap-2 mb-4">
+                <!-- Symbol buttons will be generated here by JS -->
+            </div>
+            <div class="flex justify-end gap-3">
+                <button id="textModalCancel" class="text-btn bg-gray-600 hover:bg-gray-500">取消</button>
+                <button id="textModalOk" class="text-btn text-btn-primary">確定</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const topToolbar = document.getElementById('top-toolbar');
         const mainContentWrapper = document.getElementById('main-content-wrapper');
@@ -233,6 +254,14 @@
         const changeCornersBtn = document.getElementById('changeCornersBtn');
         const exportBtn = document.getElementById('exportBtn');
 
+        // Modal elements
+        const textEditModal = document.getElementById('textEditModal');
+        const textModalInput = document.getElementById('textModalInput');
+        const symbolButtonsContainer = document.getElementById('symbolButtons');
+        const textModalOk = document.getElementById('textModalOk');
+        const textModalCancel = document.getElementById('textModalCancel');
+        let currentLineEdit = null;
+
         let imageFiles = null, jsonFiles = null, matchedFiles = [], currentFileIndex = -1;
         let originalImage = null, jsonData = null;
         let isDrawingMode = false, isCornerEditMode = false;
@@ -259,7 +288,7 @@
         mergeBtn.addEventListener('click', mergeSelectedLines);
         deleteBtn.addEventListener('click', deleteSelectedLines);
         splitBtn.addEventListener('click', splitSelectedLines);
-        editTextBtn.addEventListener('click', editSelectedLineText);
+        editTextBtn.addEventListener('click', showTextEditModal);
         editPropBtn.addEventListener('click', editSelectedBlockProps);
         editFontSizeBtn.addEventListener('click', editSelectedBlockFontSize);
         setAngleBtn.addEventListener('click', handleSetAngle);
@@ -269,6 +298,42 @@
         mainCanvas.addEventListener('mousemove', handleMouseMove);
         mainCanvas.addEventListener('mouseup', handleMouseUp);
         mainCanvas.addEventListener('mouseout', handleMouseOut);
+        
+        // Modal Event Listeners
+        textModalCancel.addEventListener('click', () => {
+            textEditModal.classList.add('hidden');
+            textEditModal.classList.remove('flex');
+            currentLineEdit = null;
+        });
+        textModalOk.addEventListener('click', () => {
+            if (currentLineEdit) {
+                const { blockIndex, lineIndex } = currentLineEdit;
+                jsonData.blocks[blockIndex].lines[lineIndex] = textModalInput.value;
+                textEditModal.classList.add('hidden');
+                textEditModal.classList.remove('flex');
+                currentLineEdit = null;
+                drawVisualizations();
+            }
+        });
+
+        // Generate Symbol Buttons
+        const symbols = ['｢', '｣', '『', '』', '〝', '〟'];
+        symbols.forEach(symbol => {
+            const btn = document.createElement('button');
+            btn.textContent = symbol;
+            btn.className = 'char-btn flex-grow';
+            btn.onclick = () => insertSymbolAtCursor(symbol);
+            symbolButtonsContainer.appendChild(btn);
+        });
+
+        function insertSymbolAtCursor(symbol) {
+            const start = textModalInput.selectionStart;
+            const end = textModalInput.selectionEnd;
+            const text = textModalInput.value;
+            textModalInput.value = text.substring(0, start) + symbol + text.substring(end);
+            textModalInput.focus();
+            textModalInput.selectionStart = textModalInput.selectionEnd = start + 1;
+        }
 
         function handleFolderSelect(e, type) {
             const files = e.target.files;
@@ -693,14 +758,14 @@
                 changeCornersBtn.classList.remove('active');
             }
         }
-        function editSelectedLineText() {
+        function showTextEditModal() {
             if (selectedLines.length !== 1) return;
-            const { blockIndex, lineIndex } = selectedLines[0];
-            const newText = prompt("請輸入新的文字內容:", jsonData.blocks[blockIndex].lines[lineIndex]);
-            if (newText !== null) {
-                jsonData.blocks[blockIndex].lines[lineIndex] = newText;
-                resetSelectionAndRedraw();
-            }
+            currentLineEdit = selectedLines[0];
+            const { blockIndex, lineIndex } = currentLineEdit;
+            textModalInput.value = jsonData.blocks[blockIndex].lines[lineIndex];
+            textEditModal.classList.remove('hidden');
+            textEditModal.classList.add('flex');
+            textModalInput.focus();
         }
         
         function editSelectedBlockProps() {
