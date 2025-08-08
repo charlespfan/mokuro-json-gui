@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mokuro JSON GUI (Legacy Compatibility)</title>
+    <title>Mokuro JSON GUI (Legacy Compatibility + TCY)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 JSZip 以建立 ZIP 檔案 -->
@@ -145,8 +145,9 @@
         <div class="divider"></div>
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
-             <button id="batchProcessBtn" class="char-btn" title="一鍵執行：替換、自動字號">一</button>
+             <button id="batchProcessBtn" class="char-btn" title="一鍵執行：替換、疊字、自動字號">一</button>
              <button id="replaceBtn" class="char-btn" title="套用固定取代規則">替</button>
+             <button id="toggleTcyBtn" class="char-btn" title="批次切換數字橫排">叠</button>
              <button id="batchAutoFontSizeBtn" class="char-btn" title="所有页面自动字号">字</button>
         </div>
 
@@ -200,8 +201,8 @@
     <div id="main-content-wrapper">
         <main id="main-content">
             <header class="text-center mb-8">
-                <h1 class="text-3xl md:text-4xl font-bold text-white">Mokuro JSON GUI (Legacy)</h1>
-                <p class="mt-2 text-lg text-gray-400">無角度功能，相容舊版 JSON 格式。</p>
+                <h1 class="text-3xl md:text-4xl font-bold text-white">Mokuro JSON GUI (Legacy + TCY)</h1>
+                <p class="mt-2 text-lg text-gray-400">無角度功能，保留疊字功能，匯出時自動移除疊字屬性以相容舊版。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -252,6 +253,7 @@
         const preprocessPanel = document.getElementById('preprocessPanel');
         const batchProcessBtn = document.getElementById('batchProcessBtn');
         const replaceBtn = document.getElementById('replaceBtn');
+        const toggleTcyBtn = document.getElementById('toggleTcyBtn');
         const batchAutoFontSizeBtn = document.getElementById('batchAutoFontSizeBtn');
         const editPanel = document.getElementById('editPanel');
         const drawModeBtn = document.getElementById('drawModeBtn');
@@ -300,6 +302,7 @@
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
         batchProcessBtn.addEventListener('click', runBatchProcess);
         replaceBtn.addEventListener('click', () => applyFixedReplacements());
+        toggleTcyBtn.addEventListener('click', () => handleToggleTcy());
         batchAutoFontSizeBtn.addEventListener('click', () => batchAutoSetFontSize());
         [showBlocksCheckbox, showLinesCheckbox, showTextCheckbox].forEach(cb => cb.addEventListener('change', drawVisualizations));
         drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -442,6 +445,9 @@
                     if (!block || typeof block !== 'object' || !Array.isArray(block.lines_coords) || !Array.isArray(block.lines)) {
                         return; 
                     }
+                    
+                    // Initialize tcy_enabled if it doesn't exist for internal use
+                    if (block.tcy_enabled === undefined) block.tcy_enabled = true;
 
                     // Sort lines within each block for consistency
                     const combined = block.lines_coords.map((coord, i) => ({
@@ -494,6 +500,7 @@
             }
             
             applyFixedReplacements(true); // isSilent = true
+            handleToggleTcy(true); // isSilent = true
             batchAutoSetFontSize(true); // isSilent = true
 
             alert("一键处理流程已执行完毕。");
@@ -527,6 +534,38 @@
             }
             if (!isSilent) {
                 alert(`處理完成！\n在 ${filesAffected} 個檔案中，共執行了 ${totalReplacements} 次文字取代。`);
+            }
+            drawVisualizations();
+        }
+
+        function handleToggleTcy(isSilent = false) {
+            if (!jsonData) return;
+            const enableTcy = isSilent ? true : confirm("您希望 [开启] 数字横排功能吗？\n(按“取消”则为关闭)");
+            const applyGlobally = isSilent ? true : confirm(`您要如何套用设定？\n\n[确定] = 套用到所有 ${matchedFiles.length} 个已载入的页面\n[取消] = 仅套用到当前页面`);
+
+            let blocksAffected = 0;
+            let filesAffected = 0;
+
+            const processData = (data) => {
+                if (data && data.blocks) {
+                    data.blocks.forEach(block => {
+                        block.tcy_enabled = enableTcy;
+                        blocksAffected++;
+                    });
+                }
+            };
+
+            if (applyGlobally) {
+                matchedFiles.forEach(file => {
+                    processData(file.data);
+                });
+                filesAffected = matchedFiles.length;
+            } else {
+                processData(jsonData);
+                filesAffected = 1;
+            }
+            if (!isSilent) {
+                alert(`处理完成！\n已为 ${filesAffected} 个档案中的 ${blocksAffected} 个区块${enableTcy ? '开启' : '关闭'}了数字横排功能。`);
             }
             drawVisualizations();
         }
@@ -741,7 +780,7 @@
         }
         function addNewLine(text, polygon, width, height) {
             const isVertical = (height / width) >= 0.9;
-            const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text] };
+            const newBlock = { box: [], vertical: isVertical, font_size: 20, lines_coords: [polygon], lines: [text], tcy_enabled: true };
             recalculateBoxForBlock(newBlock);
             jsonData.blocks.push(newBlock);
         }
@@ -796,9 +835,18 @@
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
             const block = jsonData.blocks[blockIndex];
-            block.vertical = !block.vertical;
-            alert(`區塊已切換為 ${block.vertical ? '豎排' : '橫排'}`);
-            recalculateBoxForBlock(block);
+
+            const choice = confirm("请选择操作：\n\n[确定] = 切换排列方向 (横/竖)\n[取消] = 切换数字横排 (开/关)");
+
+            if (choice) {
+                block.vertical = !block.vertical;
+                recalculateBoxForBlock(block);
+            } else {
+                if (typeof block.tcy_enabled === 'undefined') {
+                    block.tcy_enabled = true; 
+                }
+                block.tcy_enabled = !block.tcy_enabled;
+            }
             drawVisualizations();
         }
 
@@ -931,8 +979,6 @@
                 font_size: parseFloat(medianFontSize.toFixed(2)),
                 box: []
             };
-            delete newMergedBlock.angle;
-            delete newMergedBlock.tcy_enabled;
             recalculateBoxForBlock(newMergedBlock);
 
             const affectedBlockIndices = new Set();
@@ -969,8 +1015,6 @@
                             lines_coords: remainingCoords,
                             box: []
                         };
-                        delete remainderBlock.angle;
-                        delete remainderBlock.tcy_enabled;
                         recalculateBoxForBlock(remainderBlock);
                         finalBlocks.push(remainderBlock);
                     }
@@ -1115,8 +1159,8 @@
             const legacyData = JSON.parse(JSON.stringify(data));
             if (legacyData.blocks) {
                 legacyData.blocks.forEach(block => {
-                    delete block.angle;
-                    delete block.tcy_enabled;
+                    delete block.angle; // This property is not used, but good to keep for safety
+                    delete block.tcy_enabled; // Remove for legacy compatibility
                 });
             }
             return legacyData;
@@ -1444,8 +1488,7 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             if (isVertical) {
-                // For legacy version, we assume tcy_enabled is false.
-                const tcyEnabled = false; 
+                const tcyEnabled = block.tcy_enabled;
                 const segments = [];
                 const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
@@ -1548,7 +1591,7 @@
             if (!text || text.length === 0) return 20;
             if (isVertical) {
                 let totalCharCountForHeight = 0;
-                const tcyEnabled = false; // Legacy version
+                const tcyEnabled = block.tcy_enabled;
                 const regex = /([\d\uFF10-\uFF19]{2,4})/g;
                 let match;
                 let lastIndex = 0;
