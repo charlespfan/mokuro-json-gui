@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON 標註互動式編輯工具 (縦中横功能版)</title>
+    <title>JSON 標註互動式編輯工具 (縦中横功能修正版)</title>
     <!-- 引入 Tailwind CSS 以美化介面 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts，確保所有用戶都有專業的日文字體 -->
@@ -133,7 +133,6 @@
 
         <div id="preprocessPanel" class="flex items-center gap-2 opacity-50 pointer-events-none">
              <button id="replaceBtn" class="icon-btn" title="套用固定取代規則"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.18-3.185m-7.528 0l-3.182-3.182a8.25 8.25 0 0111.664 0l3.18 3.185" /></svg></button>
-             <!-- New TCY Toggle Button -->
              <button id="toggleTcyBtn" class="icon-btn" title="批次切換數字橫排"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v.01m0 3.49v.01m0 3.49v.01m0 3.49v.01m-4.5-.01H12a2.25 2.25 0 012.25 2.25V19.5h-4.5v-3.74a2.25 2.25 0 012.25-2.25z" /></svg></button>
              <button id="batchAutoFontSizeBtn" class="icon-btn" title="所有页面自动字号"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg></button>
         </div>
@@ -181,7 +180,7 @@
         <main id="main-content">
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-white">JSON 標註互動式編輯工具</h1>
-                <p class="mt-2 text-lg text-gray-400">新增「縦中横」控制功能。</p>
+                <p class="mt-2 text-lg text-gray-400">最終邏輯修正版。</p>
             </header>
             <div class="card p-4">
                  <canvas id="mainCanvas"></canvas>
@@ -334,21 +333,13 @@
             batchNav.classList.add('flex');
             setTimeout(adjustContentPadding, 100);
         }
-        function navigateFiles(direction) {
-            if (matchedFiles.length === 0) return;
-            const newIndex = currentFileIndex + direction;
-            if (newIndex >= 0 && newIndex < matchedFiles.length) {
-                currentFileIndex = newIndex;
-                loadFile(currentFileIndex);
-            }
-        }
         async function loadFile(index) {
             const currentPair = matchedFiles[index];
             jsonData = currentPair.data;
             if (jsonData.blocks) {
                 jsonData.blocks.forEach(block => {
                     if (block.angle === undefined) block.angle = 0;
-                    if (block.tcy_enabled === undefined) block.tcy_enabled = true; // Default TCY to true
+                    if (block.tcy_enabled === undefined) block.tcy_enabled = true;
                 });
             }
             try {
@@ -480,7 +471,7 @@
         function handleMouseDown(e) {
             const pos = getMousePos(e);
             if (isDrawingMode) {
-                isDrawingRect = true;
+                isDraggingRect = true;
                 startDragPoint = pos;
                 currentRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
                 return;
@@ -700,9 +691,6 @@
             }
         }
         
-        /**
-         * LOGIC CHANGE: The "Edit Properties" button now offers two choices.
-         */
         function editSelectedBlockProps() {
             if (selectedLines.length !== 1) return;
             const { blockIndex } = selectedLines[0];
@@ -710,10 +698,10 @@
 
             const choice = confirm("请选择操作：\n\n[确定] = 切换排列方向 (横/竖)\n[取消] = 切换数字横排 (开/关)");
 
-            if (choice) { // User chose "OK" -> Toggle vertical/horizontal
+            if (choice) {
                 block.vertical = !block.vertical;
                 recalculateBoxForBlock(block);
-            } else { // User chose "Cancel" -> Toggle TCY
+            } else {
                 block.tcy_enabled = !block.tcy_enabled;
             }
             drawVisualizations();
@@ -1089,18 +1077,19 @@
             ctx.textBaseline = 'middle';
             if (isVertical) {
                 const tcyEnabled = block.tcy_enabled;
-                const regex = /(\d{2,4})/g; // TCY for 2-4 digits
                 const segments = [];
+                const regex = /(\d{2,4})/g;
+                let match;
                 let lastIndex = 0;
 
                 if (tcyEnabled) {
-                    text.replace(regex, (match, offset) => {
-                        if (offset > lastIndex) {
-                            segments.push({ text: text.substring(lastIndex, offset), tcy: false });
+                    while ((match = regex.exec(text)) !== null) {
+                        if (match.index > lastIndex) {
+                            segments.push({ text: text.substring(lastIndex, match.index), tcy: false });
                         }
-                        segments.push({ text: match, tcy: true });
-                        lastIndex = offset + match.length;
-                    });
+                        segments.push({ text: match[0], tcy: true });
+                        lastIndex = regex.lastIndex;
+                    }
                 }
                 if (lastIndex < text.length) {
                     segments.push({ text: text.substring(lastIndex), tcy: false });
@@ -1111,7 +1100,7 @@
                     if (seg.tcy) {
                         const tcyFont = `${fontSize}px "Noto Sans JP", sans-serif`;
                         ctx.font = tcyFont;
-                        totalTextHeight += ctx.measureText(seg.text).width * 0.8; // TCY text is slightly wider than it is tall
+                        totalTextHeight += ctx.measureText(seg.text).width * 0.8;
                         ctx.font = font;
                     } else {
                         for (const char of seg.text) {
