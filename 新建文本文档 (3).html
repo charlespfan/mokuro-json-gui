@@ -440,7 +440,7 @@
                         let minFontSize = Infinity;
                         block.lines.forEach((lineText, lineIndex) => {
                             const polygon = block.lines_coords[lineIndex];
-                            const size = calculateAutoFontSize(lineText, polygon, block.vertical);
+                            const size = calculateAutoFontSize(lineText, polygon, block);
                             if (size < minFontSize) { minFontSize = size; }
                         });
                         block.font_size = parseFloat(minFontSize.toFixed(2));
@@ -674,7 +674,7 @@
             editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
-            setAngleBtn.disabled = !isSingleBlockSelected;
+            setAngleBtn.disabled = !isSingleLineSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
                 isCornerEditMode = false;
@@ -741,7 +741,7 @@
                 let minFontSize = Infinity;
                 block.lines.forEach((lineText, lineIndex) => {
                     const polygon = block.lines_coords[lineIndex];
-                    const size = calculateAutoFontSize(lineText, polygon, block.vertical);
+                    const size = calculateAutoFontSize(lineText, polygon, block);
                     if (size < minFontSize) { minFontSize = size; }
                 });
                 block.font_size = parseFloat(minFontSize.toFixed(2));
@@ -1016,7 +1016,6 @@
                         }
 
                         if (showText) {
-                            // BUG FIX: Pass block.font_size instead of undefined 'fontSize'
                             drawTextInPolygon(block.lines[lineIndex], linePolygon, block, block.font_size, scaleFactor);
                         }
                         if (isActiveTarget) {
@@ -1099,10 +1098,7 @@
                 let totalTextHeight = 0;
                 segments.forEach(seg => {
                     if (seg.tcy) {
-                        const tcyFont = `${fontSize}px "Noto Sans JP", sans-serif`;
-                        ctx.font = tcyFont;
-                        totalTextHeight += ctx.measureText(seg.text).width * 0.8;
-                        ctx.font = font;
+                        totalTextHeight += fontSize; // TCY block occupies one character's height
                     } else {
                         for (const char of seg.text) {
                             totalTextHeight += getCharVerticalHeight(char, fontSize);
@@ -1113,22 +1109,19 @@
                 let currentY = -totalTextHeight / 2;
                 for (const seg of segments) {
                     if (seg.tcy) {
-                        const tcyFont = `${fontSize}px "Noto Sans JP", sans-serif`;
-                        ctx.font = tcyFont;
-                        const segmentWidth = ctx.measureText(seg.text).width * 0.8;
-                        const segmentHeight = segmentWidth;
-                        
-                        ctx.save();
-                        ctx.translate(0, currentY + segmentHeight / 2);
-                        ctx.rotate(Math.PI / 2);
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.strokeText(seg.text, 0, 0);
-                        ctx.fillText(seg.text, 0, 0);
-                        ctx.restore();
-
+                        const segmentHeight = fontSize; // It occupies one character's height
+                        const charY = currentY + segmentHeight / 2;
+                        // Draw stacked numbers
+                        for (let i = 0; i < seg.text.length; i++) {
+                            const char = seg.text[i];
+                            ctx.save();
+                            ctx.translate(0, charY);
+                            ctx.rotate(Math.PI / 2);
+                            ctx.strokeText(char, 0, 0);
+                            ctx.fillText(char, 0, 0);
+                            ctx.restore();
+                        }
                         currentY += segmentHeight;
-                        ctx.font = font;
                     } else {
                         for (const char of seg.text) {
                             const charHeight = getCharVerticalHeight(char, fontSize);
@@ -1180,7 +1173,8 @@
             }
             ctx.restore();
         }
-        function calculateAutoFontSize(text, polygon, isVertical) {
+        function calculateAutoFontSize(text, polygon, block) {
+            const isVertical = block.vertical;
             const p0 = polygon[0], p1 = polygon[1], p2 = polygon[2], p3 = polygon[3];
             const width1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), width2 = Math.hypot(p2[0] - p3[0], p2[1] - p3[1]);
             const avgWidth = (width1 + width2) / 2;
@@ -1189,7 +1183,32 @@
             if (!text || text.length === 0) return 20;
             if (isVertical) {
                 let totalCharCountForHeight = 0;
-                for(const char of text) { totalCharCountForHeight += (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) ? 0.5 : 1.0; }
+                const tcyEnabled = block.tcy_enabled;
+                const regex = /(\d{2,4})/g;
+                let match;
+                let lastIndex = 0;
+                let processedText = "";
+
+                if (tcyEnabled) {
+                     while ((match = regex.exec(text)) !== null) {
+                        if (match.index > lastIndex) {
+                            processedText += text.substring(lastIndex, match.index);
+                        }
+                        processedText += "T"; // Replace TCY block with a single placeholder character
+                        lastIndex = regex.lastIndex;
+                    }
+                }
+                if (lastIndex < text.length) {
+                    processedText += text.substring(lastIndex);
+                }
+
+                for(const char of processedText) { 
+                    if (char === 'T') {
+                        totalCharCountForHeight += 1.0;
+                    } else {
+                        totalCharCountForHeight += (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) ? 0.5 : 1.0;
+                    }
+                }
                 return totalCharCountForHeight > 0 ? (avgHeight / totalCharCountForHeight) : avgHeight;
             } else {
                 let fontSize = avgHeight;
