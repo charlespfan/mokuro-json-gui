@@ -1179,26 +1179,32 @@
             drawVisualizations();
         }
 
+        // 這是實現您「智能追加排序」的核心邏輯
         function applyReorder() {
             if (reorderSequence.length === 0) {
                 toggleReorderMode();
                 return;
             }
 
-            const newBlocks = [];
             const reorderedIndicesSet = new Set(reorderSequence);
+            const untouchedBlocks = [];
+            const reorderedBlocksInNewOrder = [];
 
-            reorderSequence.forEach(originalIndex => {
-                newBlocks.push(jsonData.blocks[originalIndex]);
-            });
-
+            // 1. 找出所有未被點擊的框，並按原始順序儲存
             jsonData.blocks.forEach((block, index) => {
                 if (!reorderedIndicesSet.has(index)) {
-                    newBlocks.push(block);
+                    untouchedBlocks.push(block);
                 }
             });
 
-            jsonData.blocks = newBlocks;
+            // 2. 根據您點擊的順序，生成已排序框的新列表
+            reorderSequence.forEach(originalIndex => {
+                reorderedBlocksInNewOrder.push(jsonData.blocks[originalIndex]);
+            });
+
+            // 3. 將未觸碰的框放在前面，手動排序的框接在後面
+            jsonData.blocks = [...untouchedBlocks, ...reorderedBlocksInNewOrder];
+            
             toggleReorderMode();
         }
         
