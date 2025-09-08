@@ -137,9 +137,15 @@
         <input type="file" id="jsonFolderInput" class="hidden" webkitdirectory directory multiple>
         
         <div id="batch-nav" class="hidden items-center gap-2">
-            <button id="prevFileBtn" class="icon-btn" title="上一張"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg></button>
-            <span id="fileCounter" class="font-semibold text-sm text-gray-300 w-20 text-center"></span>
-            <button id="nextFileBtn" class="icon-btn" title="下一張"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg></button>
+            <button id="prevFileBtn" class="icon-btn" title="上一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg></button>
+            
+            <div class="flex items-center">
+                <input type="number" id="pageInput" class="w-16 bg-gray-700 border border-gray-600 rounded-md px-2 py-1 text-center text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <span id="fileCounterTotal" class="font-semibold text-sm text-gray-300 px-2"></span>
+                <button id="jumpToPageBtn" class="text-btn text-btn-primary py-1" title="跳转到指定页码">Go</button>
+            </div>
+
+            <button id="nextFileBtn" class="icon-btn" title="下一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg></button>
         </div>
         
         <div class="divider"></div>
@@ -247,6 +253,9 @@
         const batchNav = document.getElementById('batch-nav');
         const prevFileBtn = document.getElementById('prevFileBtn');
         const nextFileBtn = document.getElementById('nextFileBtn');
+        const pageInput = document.getElementById('pageInput');
+        const fileCounterTotal = document.getElementById('fileCounterTotal');
+        const jumpToPageBtn = document.getElementById('jumpToPageBtn');
         const fileCounter = document.getElementById('fileCounter');
         const showBlocksCheckbox = document.getElementById('showBlocks');
         const showLinesCheckbox = document.getElementById('showLines');
@@ -312,6 +321,12 @@
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
         prevFileBtn.addEventListener('click', () => navigateFiles(-1));
         nextFileBtn.addEventListener('click', () => navigateFiles(1));
+        jumpToPageBtn.addEventListener('click', jumpToPage);
+        pageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                jumpToPage();
+            }
+        });
         batchProcessBtn.addEventListener('click', runBatchProcess);
         replaceBtn.addEventListener('click', () => applyFixedReplacements());
         toggleTcyBtn.addEventListener('click', () => handleToggleTcy());
@@ -495,7 +510,9 @@
                 editPanel.classList.remove('opacity-50', 'pointer-events-none');
                 preprocessPanel.classList.remove('opacity-50', 'pointer-events-none');
                 exportPanel.classList.remove('opacity-50', 'pointer-events-none');
-                fileCounter.textContent = `${index + 1} / ${matchedFiles.length}`;
+                // 更新新的UI元素
+                if(pageInput) pageInput.value = index + 1;
+                if(fileCounterTotal) fileCounterTotal.textContent = `/ ${matchedFiles.length}`;
                 prevFileBtn.disabled = index === 0;
                 nextFileBtn.disabled = index === matchedFiles.length - 1;
                 resetSelectionAndRedraw();
@@ -1909,6 +1926,27 @@
                 finalCenter.x + width / 2,
                 finalCenter.y + height / 2,
             ];
+        }
+
+        function jumpToPage() {
+            if (!pageInput || matchedFiles.length === 0) return;
+
+            const pageNum = parseInt(pageInput.value, 10);
+
+            // 验证输入是否有效
+            if (isNaN(pageNum) || pageNum < 1 || pageNum > matchedFiles.length) {
+                alert(`请输入一个介于 1 到 ${matchedFiles.length} 之间的有效页码。`);
+                // 将输入框的值重置为当前页码
+                pageInput.value = currentFileIndex + 1;
+                return;
+            }
+
+            const newIndex = pageNum - 1; // 用户输入的是页码（从1开始），索引是从0开始
+
+            if (newIndex !== currentFileIndex) {
+                currentFileIndex = newIndex;
+                loadFile(currentFileIndex);
+            }
         }
     </script>
 </body>
