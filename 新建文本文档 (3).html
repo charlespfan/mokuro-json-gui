@@ -295,8 +295,18 @@
         let isDraggingRect = false, startDragPoint = { x: 0, y: 0 }, currentRect = { x: 0, y: 0, w: 0, h: 0 };
         let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, originalAngle: 0, center: {x: 0, y: 0}, startAngle: 0 };
         const HANDLE_RADIUS = 8, SCALE_HANDLE_RADIUS = 5;
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>〈〉（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
-        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ", CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,", CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》〈〉【】〝〟。、·・";
+        // 分類1：需要【全高間距】的白名單（字母、數字、省略號和長破折號）
+        const ROTATED_LETTERS_NUMBERS = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789…—–-~ー＝－～〜";
+
+        // 分類2：【所有需要旋轉】的完整列表
+        const CHARS_TO_ROTATE = "()[]{}<>〈〉（）【】《》『』「」｛｝｢｣〝〟";
+
+        // 分類3：【不旋轉】的豎排壓縮字符
+        const CHARS_VERTICAL_COMPRESSION = "。、·・〈〉（）【】《》『』「」｛｝｢｣〝〟";
+
+        // 輔助分類（維持不變）
+        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
+        const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
 
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
@@ -1503,15 +1513,17 @@
             return (code >= 0x0020 && code <= 0x007E) || (code >= 0xFF61 && code <= 0xFF9F);
         }
         function getCharVerticalHeight(char, fontSize) {
-            // 如果字符是需要旋轉的半角字母/數字，則它旋轉後的高度應視為完整的 fontSize
-            if (CHARS_TO_ROTATE.includes(char)) {
+            // 規則1：只要在“全高白名單”中，間距永遠是【全高】。
+            if (ROTATED_LETTERS_NUMBERS.includes(char)) {
                 return fontSize;
             }
-            // 對於其他半角字符（如不旋轉的標點）或需要壓縮的字符，則維持半高
-            if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) {
+
+            // 規則2：如果是任何其他特殊字符（無論旋轉與否），間距都是【半高】。
+            if (CHARS_TO_ROTATE.includes(char) || CHARS_VERTICAL_COMPRESSION.includes(char) || isHalfWidth(char)) {
                 return fontSize * 0.5;
             }
-            // 預設情況（如全形漢字）回傳完整高度
+
+            // 規則3：預設情況（如漢字），間距為【全高】。
             return fontSize;
         }
         function drawTextInPolygon(text, polygon, block, fontSize = 20, scaleFactor = 1) {
@@ -1564,7 +1576,7 @@
                     } else {
                         for (const char of seg.text) {
                             // 對於旋轉字母，使用其測量寬度作為高度
-                            if (CHARS_TO_ROTATE.includes(char)) {
+                            if (ROTATED_LETTERS_NUMBERS.includes(char)) {
                                 totalTextHeight += ctx.measureText(char).width;
                             } else { // 其他字符沿用舊方法
                                 totalTextHeight += getCharVerticalHeight(char, fontSize);
@@ -1588,9 +1600,10 @@
                         currentY += segmentHeight;
                     } else {
                         for (const char of seg.text) {
+                            const charHeight = getCharVerticalHeight(char, fontSize);
                             // 【核心修改】
                             // 判斷是否為需要旋轉的字母
-                            if (CHARS_TO_ROTATE.includes(char)) {
+                            if (ROTATED_LETTERS_NUMBERS.includes(char)) {
                                 // 1. 測量該字母的實際寬度
                                 const charWidth = ctx.measureText(char).width;
                                 // 2. 計算繪製位置 (中心點)
@@ -1608,9 +1621,17 @@
                                 // 4. 更新Y軸座標，使用【實際測量寬度】推進
                                 currentY += charWidth;
 
-                            } else {
-                                // 對於不需要旋轉的字符，沿用舊的、穩定的邏輯
-                                const charHeight = getCharVerticalHeight(char, fontSize);
+                            } else if (CHARS_TO_ROTATE.includes(char)) {
+                                const charY = currentY + charHeight / 2;
+                                ctx.save();
+                                ctx.translate(0, charY);
+                                ctx.rotate(Math.PI / 2);
+                                if (char === "〜") ctx.scale(-1, 1);
+                                ctx.strokeText(char, 0, 0);
+                                ctx.fillText(char, 0, 0);
+                                ctx.restore();
+                                currentY += charHeight;
+                            } else { // 處理所有不旋轉的字符
                                 const charY = currentY + charHeight / 2;
                                 if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
                                     const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
