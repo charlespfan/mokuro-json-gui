@@ -315,7 +315,11 @@
 
         // 輔助分類（維持不變）
         const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ";
-        const CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,";
+        const CHARS_PUNCTUATION_TOP_RIGHT = "、。，";
+        const HALF_WIDTH_PUNCTUATION_TOP_RIGHT = "､,";
+
+        // 新增：定义需要在横排时压缩间距的标点符号
+        const CHARS_HORIZONTAL_COMPRESSION = "，。、；：？！·・〈〉（）【】《》『』「」｛｝｢｣〝〟";
 
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
@@ -1683,6 +1687,10 @@
                             } else { // 處理所有不旋轉的字符
                                 const charY = currentY + charHeight / 2;
                                 if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
+                                    const offsetX = fontSize * 0.6, offsetY = fontSize * 0.4;
+                                    ctx.strokeText(char, offsetX, charY - offsetY);
+                                    ctx.fillText(char, offsetX, charY - offsetY);
+                                } else if (HALF_WIDTH_PUNCTUATION_TOP_RIGHT.includes(char)) {
                                     const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
                                     ctx.strokeText(char, offsetX, charY - offsetY);
                                     ctx.fillText(char, offsetX, charY - offsetY);
@@ -1703,9 +1711,12 @@
                 ctx.textAlign = 'left';
                 const textWidth = ctx.measureText(text).width;
                 let currentX = -textWidth / 2;
+                // 【修改后】的 for 循环，请用它替换原始的循环
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
                     const charWidth = ctx.measureText(char).width;
+                    
+                    // 绘制字符的逻辑保持不变
                     if (char === "〜") {
                         ctx.save();
                         ctx.translate(currentX + charWidth / 2, 0);
@@ -1717,7 +1728,17 @@
                         ctx.strokeText(char, currentX, 0);
                         ctx.fillText(char, currentX, 0);
                     }
-                    currentX += charWidth;
+
+                    // --- 修改后的间距计算逻辑 ---
+                    // 检查当前字符是否在我们第一步定义的新列表中
+                    if (CHARS_HORIZONTAL_COMPRESSION.includes(char)) {
+                        // 如果是，只让“光标”前进其测量宽度的一半，实现压缩效果
+                        currentX += charWidth * 0.5; // 您可以调整 0.5 这个值，例如 0.6
+                    } else {
+                        // 如果不是特殊标点，则按正常宽度前进
+                        currentX += charWidth;
+                    }
+                    // --- 逻辑结束 ---
                 }
             }
             ctx.restore();
