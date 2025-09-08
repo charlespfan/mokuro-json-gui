@@ -296,10 +296,10 @@
         let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, originalAngle: 0, center: {x: 0, y: 0}, startAngle: 0 };
         const HANDLE_RADIUS = 8, SCALE_HANDLE_RADIUS = 5;
         // 分類1：需要【全高間距】的白名單（字母、數字、省略號和長破折號）
-        const ROTATED_LETTERS_NUMBERS = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789…—–-~ー＝－～〜";
+        const ROTATED_LETTERS_NUMBERS = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789…—~ー＝–－～〜";
 
         // 分類2：【所有需要旋轉】的完整列表
-        const CHARS_TO_ROTATE = "()[]{}<>〈〉（）【】《》『』「」｛｝｢｣〝〟";
+        const CHARS_TO_ROTATE = "()[]{}<>〈〉（）【】《》『』「」｛｝｢｣〝〟-";
 
         // 分類3：【不旋轉】的豎排壓縮字符
         const CHARS_VERTICAL_COMPRESSION = "。、·・〈〉（）【】《》『』「」｛｝｢｣〝〟";
@@ -1588,16 +1588,48 @@
 
                 let currentY = -totalTextHeight / 2;
                 for (const seg of segments) {
+                    // 这是修改后的新代码，请用它替换原始代码块
                     if (seg.tcy) {
                         const segmentHeight = fontSize;
                         const charY = currentY + segmentHeight / 2;
-                        ctx.save();
+
+                        ctx.save(); // 保存当前绘图状态
+
+                        // --- 新增的修改逻辑 ---
+
+                        // 目标宽度就是一个汉字方块的宽度，即字体大小
+                        const targetWidth = fontSize * 1.1; 
+
+                        // 测量当前数字字符串的实际渲染宽度
+                        const measuredWidth = ctx.measureText(seg.text).width;
+
+                        let scaleX = 1.0; // 默认缩放比例为1（不缩放）
+
+                        // 仅当实际宽度大于目标宽度时，才计算缩放比例以进行压缩
+                        if (measuredWidth > targetWidth && measuredWidth > 0) {
+                            scaleX = targetWidth / measuredWidth;
+                        }
+
+                        // 将坐标原点移动到我们将要绘制文本的位置
+                        // 注意：缩放是相对于原点(0,0)进行的，所以必须先平移再缩放
+                        ctx.translate(0, charY);
+
+                        // 应用水平缩放
+                        ctx.scale(scaleX, 1);
+
+                        // 设置文本对齐方式
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.strokeText(seg.text, 0, charY);
-                        ctx.fillText(seg.text, 0, charY);
-                        ctx.restore();
-                        currentY += segmentHeight;
+
+                        // 在新的原点(0,0)处绘制文本，它现在已经被正确缩放
+                        ctx.strokeText(seg.text, 0, 0);
+                        ctx.fillText(seg.text, 0, 0);
+
+                        // --- 修改逻辑结束 ---
+
+                        ctx.restore(); // 恢复到保存前的绘图状态，取消缩放和平移的影响
+
+                        currentY += segmentHeight; // 移动到下一个字符的位置
                     } else {
                         for (const char of seg.text) {
                             const charHeight = getCharVerticalHeight(char, fontSize);
