@@ -295,8 +295,8 @@
         let isDraggingRect = false, startDragPoint = { x: 0, y: 0 }, currentRect = { x: 0, y: 0, w: 0, h: 0 };
         let activeTransform = { action: null, handleIndex: -1, startPos: {x: 0, y: 0}, originalPoints: null, originalBox: null, originalAngle: 0, center: {x: 0, y: 0}, startAngle: 0 };
         const HANDLE_RADIUS = 8, SCALE_HANDLE_RADIUS = 5;
-        const CHARS_TO_ROTATE = "…—–-~()[]{}<>（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
-        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ", CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,", CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》【】〝〟。、・";
+        const CHARS_TO_ROTATE = "…—–-~()[]{}<>〈〉（）【】《》『』「」ー＝－～〜｛｝｢｣〝〟qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789";
+        const CHARS_SMALL_KANA_TOP_RIGHT = "ゃゅょっぁぃぅぇぉャュョッァィゥェォヵヶ", CHARS_PUNCTUATION_TOP_RIGHT = "、。､，,", CHARS_VERTICAL_COMPRESSION = "｛｝「」『』（）《》〈〉【】〝〟。、·・";
 
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
@@ -1503,7 +1503,15 @@
             return (code >= 0x0020 && code <= 0x007E) || (code >= 0xFF61 && code <= 0xFF9F);
         }
         function getCharVerticalHeight(char, fontSize) {
-            if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) { return fontSize * 0.5; }
+            // 如果字符是需要旋轉的半角字母/數字，則它旋轉後的高度應視為完整的 fontSize
+            if (CHARS_TO_ROTATE.includes(char)) {
+                return fontSize;
+            }
+            // 對於其他半角字符（如不旋轉的標點）或需要壓縮的字符，則維持半高
+            if (isHalfWidth(char) || CHARS_VERTICAL_COMPRESSION.includes(char)) {
+                return fontSize * 0.5;
+            }
+            // 預設情況（如全形漢字）回傳完整高度
             return fontSize;
         }
         function drawTextInPolygon(text, polygon, block, fontSize = 20, scaleFactor = 1) {
@@ -1547,16 +1555,24 @@
                     segments.push({ text: text.substring(lastIndex), tcy: false });
                 }
 
+                // 計算總高度的部分可以簡化，因為我們會動態測量
                 let totalTextHeight = 0;
+                ctx.font = font; // 必須先設定字體才能測量
                 segments.forEach(seg => {
                     if (seg.tcy) {
                         totalTextHeight += fontSize;
                     } else {
                         for (const char of seg.text) {
-                            totalTextHeight += getCharVerticalHeight(char, fontSize);
+                            // 對於旋轉字母，使用其測量寬度作為高度
+                            if (CHARS_TO_ROTATE.includes(char)) {
+                                totalTextHeight += ctx.measureText(char).width;
+                            } else { // 其他字符沿用舊方法
+                                totalTextHeight += getCharVerticalHeight(char, fontSize);
+                            }
                         }
                     }
                 });
+
 
                 let currentY = -totalTextHeight / 2;
                 for (const seg of segments) {
@@ -1572,9 +1588,15 @@
                         currentY += segmentHeight;
                     } else {
                         for (const char of seg.text) {
-                            const charHeight = getCharVerticalHeight(char, fontSize);
-                            const charY = currentY + charHeight / 2;
+                            // 【核心修改】
+                            // 判斷是否為需要旋轉的字母
                             if (CHARS_TO_ROTATE.includes(char)) {
+                                // 1. 測量該字母的實際寬度
+                                const charWidth = ctx.measureText(char).width;
+                                // 2. 計算繪製位置 (中心點)
+                                const charY = currentY + charWidth / 2;
+
+                                // 3. 繪製旋轉後的字母
                                 ctx.save();
                                 ctx.translate(0, charY);
                                 ctx.rotate(Math.PI / 2);
@@ -1582,19 +1604,28 @@
                                 ctx.strokeText(char, 0, 0);
                                 ctx.fillText(char, 0, 0);
                                 ctx.restore();
-                            } else if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
-                                const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
-                                ctx.strokeText(char, offsetX, charY - offsetY);
-                                ctx.fillText(char, offsetX, charY - offsetY);
-                            } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
-                                const offsetX = fontSize * 0.15, offsetY = fontSize * 0.15;
-                                ctx.strokeText(char, offsetX, charY - offsetY);
-                                ctx.fillText(char, offsetX, charY - offsetY);
+
+                                // 4. 更新Y軸座標，使用【實際測量寬度】推進
+                                currentY += charWidth;
+
                             } else {
-                                ctx.strokeText(char, 0, charY);
-                                ctx.fillText(char, 0, charY);
+                                // 對於不需要旋轉的字符，沿用舊的、穩定的邏輯
+                                const charHeight = getCharVerticalHeight(char, fontSize);
+                                const charY = currentY + charHeight / 2;
+                                if (CHARS_PUNCTUATION_TOP_RIGHT.includes(char)) {
+                                    const offsetX = fontSize * 0.4, offsetY = fontSize * 0.4;
+                                    ctx.strokeText(char, offsetX, charY - offsetY);
+                                    ctx.fillText(char, offsetX, charY - offsetY);
+                                } else if (CHARS_SMALL_KANA_TOP_RIGHT.includes(char)) {
+                                    const offsetX = fontSize * 0.15, offsetY = fontSize * 0.15;
+                                    ctx.strokeText(char, offsetX, charY - offsetY);
+                                    ctx.fillText(char, offsetX, charY - offsetY);
+                                } else {
+                                    ctx.strokeText(char, 0, charY);
+                                    ctx.fillText(char, 0, charY);
+                                }
+                                currentY += charHeight;
                             }
-                            currentY += charHeight;
                         }
                     }
                 }
