@@ -163,7 +163,8 @@
             <button id="drawModeBtn" class="icon-btn" title="拖曳新增矩形框"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg></button>
             <button id="autoFontSizeBtn" class="char-btn" title="自動字號">自</button>
             
-            <button id="fitBlockBtn" class="char-btn" title="自適應外框" disabled>適</button>
+            <button id="fitBlockBtn" class="char-btn" title="自適應外框 (保持零度)" disabled>適</button>
+            <button id="skewBlockBtn" class="char-btn" title="計算角度並傾斜外框" disabled>斜</button>
             <button id="rectifyBtn" class="char-btn" title="矩形化">矩</button>
             <button id="straightenBtn" class="char-btn" title="扶正">扶</button>
             <button id="mergeBtn" class="char-btn" title="合併 (0)" disabled>合</button>
@@ -269,6 +270,8 @@
         const drawModeBtn = document.getElementById('drawModeBtn');
         const autoFontSizeBtn = document.getElementById('autoFontSizeBtn');
         const fitBlockBtn = document.getElementById('fitBlockBtn');
+        // 在 fitBlockBtn 后面添加
+        const skewBlockBtn = document.getElementById('skewBlockBtn');
         const rectifyBtn = document.getElementById('rectifyBtn');
         const straightenBtn = document.getElementById('straightenBtn');
         const mergeBtn = document.getElementById('mergeBtn');
@@ -339,6 +342,8 @@
         drawModeBtn.addEventListener('click', toggleDrawMode);
         autoFontSizeBtn.addEventListener('click', autoSetFontSize);
         fitBlockBtn.addEventListener('click', fitSelectedBlockToLines);
+        // 为“斜”按钮绑定点击事件
+        skewBlockBtn.addEventListener('click', skewSelectedBlock);
         rectifyBtn.addEventListener('click', handleRectify);
         straightenBtn.addEventListener('click', handleStraighten);
         mergeBtn.addEventListener('click', mergeSelectedLines);
@@ -862,6 +867,7 @@
             editPropBtn.disabled = !isSingleBlockSelected;
             editFontSizeBtn.disabled = !isSingleLineSelected;
             fitBlockBtn.disabled = !isSingleBlockSelected;
+            skewBlockBtn.disabled = !isSingleBlockSelected;
             setAngleBtn.disabled = !isSingleBlockSelected;
             changeCornersBtn.disabled = !isSingleLineSelected;
             if (!isSingleLineSelected && isCornerEditMode) {
@@ -940,7 +946,15 @@
             const blockIndex = getSelectedBlockIndex();
             if (blockIndex === -1) return;
             const block = jsonData.blocks[blockIndex];
-            recalculateBoxForBlock(block);
+            recalculateBoxForBlock(block, false); // <--- 修改点：传入 false，不计算角度
+            drawVisualizations();
+        }
+        // 为“斜”按钮新增的函数
+        function skewSelectedBlock() {
+            const blockIndex = getSelectedBlockIndex();
+            if (blockIndex === -1) return;
+            const block = jsonData.blocks[blockIndex];
+            recalculateBoxForBlock(block, true); // <--- 传入 true，计算角度
             drawVisualizations();
         }
         
@@ -1888,17 +1902,18 @@
             });
         }
         
-        function recalculateBoxForBlock(block) {
+        // 【修改后】的函数定义
+        function recalculateBoxForBlock(block, calculateAngle = true) {
             if (!block || !block.lines_coords || block.lines_coords.length === 0) {
                 block.box = [0, 0, 0, 0];
                 block.angle = 0;
                 return;
             }
 
-            const isInitiallyStraight = Math.abs(block.angle) < 0.01;
             let finalAngleDeg = 0;
 
-            if (!isInitiallyStraight) {
+            // --- 核心修改：只有在 calculateAngle 为 true 时才计算角度 ---
+            if (calculateAngle) {
                 let totalBaselineVecX = 0;
                 let totalBaselineVecY = 0;
                 block.lines_coords.forEach(poly => {
