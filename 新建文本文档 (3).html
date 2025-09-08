@@ -137,7 +137,7 @@
         <input type="file" id="jsonFolderInput" class="hidden" webkitdirectory directory multiple>
         
         <div id="batch-nav" class="hidden items-center gap-2">
-            <button id="prevFileBtn" class="icon-btn" title="上一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg></button>
+            <button id="prevFileBtn" class="icon-btn" title="下一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg></button>
             
             <div class="flex items-center">
                 <input type="number" id="pageInput" class="w-16 bg-gray-700 border border-gray-600 rounded-md px-2 py-1 text-center text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
@@ -145,7 +145,7 @@
                 <button id="jumpToPageBtn" class="text-btn text-btn-primary py-1" title="跳转到指定页码">Go</button>
             </div>
 
-            <button id="nextFileBtn" class="icon-btn" title="下一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg></button>
+            <button id="nextFileBtn" class="icon-btn" title="上一张"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg></button>
         </div>
         
         <div class="divider"></div>
@@ -326,8 +326,9 @@
 
         imageFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'image'));
         jsonFolderInput.addEventListener('change', (e) => handleFolderSelect(e, 'json'));
-        prevFileBtn.addEventListener('click', () => navigateFiles(-1));
-        nextFileBtn.addEventListener('click', () => navigateFiles(1));
+        // 功能互换：左箭头(-1)变成前进，右箭头(1)变成后退
+        prevFileBtn.addEventListener('click', () => navigateFiles(1));  // 原本是 -1，改为 1
+        nextFileBtn.addEventListener('click', () => navigateFiles(-1)); // 原本是 1，改为 -1
         jumpToPageBtn.addEventListener('click', jumpToPage);
         pageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -522,8 +523,9 @@
                 // 更新新的UI元素
                 if(pageInput) pageInput.value = index + 1;
                 if(fileCounterTotal) fileCounterTotal.textContent = `/ ${matchedFiles.length}`;
-                prevFileBtn.disabled = index === 0;
-                nextFileBtn.disabled = index === matchedFiles.length - 1;
+                // 將 prevFileBtn 和 nextFileBtn 互換，以匹配新的功能
+                nextFileBtn.disabled = index === 0; // 新的“上一頁”按鈕（右箭頭）在第一頁時禁用
+                prevFileBtn.disabled = index === matchedFiles.length - 1; // 新的“下一頁”按鈕（左箭頭）在最後一頁時禁用
                 resetSelectionAndRedraw();
             } catch (error) {
                 console.error("Error loading image file:", error);
